@@ -5,6 +5,10 @@ Visitors can orbit, pan and zoom on desktop and mobile, and click points of inte
 
 Built from open data (Copernicus DEM, Sentinel-2, OpenStreetMap) and rendered with Three.js.
 
+**Live preview:** https://singulardroid.github.io/elbrus-summit/ (try `?lang=en`, `?lang=zh`,
+`?lang=ar`, or a station: `#station=87`). Publish an update with `./scripts/deploy-pages.sh`:
+it builds the viewer with the local 3D data and replaces the `gh-pages` branch.
+
 - **Plan & architecture:** [PLAN.md](PLAN.md)
 - **Data sources & licences:** [docs/data-sources.md](docs/data-sources.md)
 
@@ -17,6 +21,7 @@ Built from open data (Copernicus DEM, Sentinel-2, OpenStreetMap) and rendered wi
 | `content/` | Curated points of interest (`pois.geojson`) and routes |
 | `data/` | Git-ignored working data: `raw/` downloads, `work/` intermediates, `build/` deployable output |
 | `docs/` | Notes, sources, attribution |
+| `scripts/` | `deploy-pages.sh`: publish the built site to GitHub Pages |
 
 ## Status
 
