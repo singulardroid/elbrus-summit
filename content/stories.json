@@ -1,16 +1,21 @@
 {
-  "_note": "The 250 stories. Fill in entries by number; anything missing shows the design's placeholders. Copied into the web build by pipeline/build_web.py (also with --skip-tiles).",
+  "_note": "The 250 stories, one per station. Fill in entries by number; anything missing shows the design's placeholders. Every text field can be one string or one per language: {\"ru\": \"…\", \"en\": \"…\", \"zh\": \"…\", \"ar\": \"…\"} (a missing language falls back to English, then Russian). Copied into the web build by pipeline/build_web.py (also with --skip-tiles).",
   "_schema": {
     "opened": "how many stories are open (1..opened); the URL ?opened= overrides it for testing",
     "nextOpensAt": "ISO date-time when the next story opens (drives the countdown), or null",
     "stories[]": {
-      "n": "1..250",
-      "title": "string",
+      "n": "1..250, the station number",
+      "title": "text (string or {ru, en, zh, ar})",
       "date": "YYYY-MM-DD, when it opened",
-      "rubric": "string, e.g. Люди / Рекорды / История",
-      "lead": "one or two sentences",
-      "body": ["paragraphs"],
-      "media": { "type": "image | video", "src": "URL or path", "alt": "string", "credit": "author, licence" }
+      "rubric": "text, e.g. {\"ru\": \"Люди\", \"en\": \"People\"}",
+      "lead": "text: one or two sentences",
+      "body": "list of paragraph texts, or {\"ru\": [paragraphs], \"en\": [paragraphs], …}",
+      "media": {
+        "type": "image | video",
+        "src": "URL or path",
+        "alt": "text",
+        "credit": "text: author, licence"
+      }
     }
   },
   "opened": 87,

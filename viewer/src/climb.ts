@@ -124,15 +124,3 @@ export class Climb {
     return best;
   }
 }
-
-/** Short Russian station names for the climb HUD. */
-export const STATION_RU: Record<string, string> = {
-  azau: 'Азау', krugosor: 'Кругозор', mir: 'Мир', garabashi: 'Гарабаши', 'priyut-11': 'Приют 11',
-  'pastukhov-rocks': 'Скалы Пастухова', saddle: 'Седловина', 'west-summit': 'Западная вершина',
-  'north-hut': 'Северный приют', 'east-summit': 'Восточная вершина', 'jily-su': 'Джилы-Су',
-};
-
-/** Even shorter names for the route strip. */
-export const STATION_SHORT_RU: Record<string, string> = {
-  ...STATION_RU, 'pastukhov-rocks': 'Пастухова', 'west-summit': 'Вершина', 'east-summit': 'Вост. вершина',
-};

@@ -2,7 +2,8 @@
 //
 // Scene convention: X = east, Y = up, Z = south (north is -Z), metres, origin = grid centre.
 
-export interface Localized { en?: string; ru?: string }
+import type { Localized } from './i18n';
+export type { Localized };
 
 export interface Poi {
   id: string;

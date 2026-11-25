@@ -1,21 +1,25 @@
 import type { DoorState } from './doors';
-import { STATION_RU } from './climb';
+import { stageText } from './climbHud';
+import { applyI18n, dateLong, km, lang, loc, metres, num, onLang, plural, t, type Localized } from './i18n';
 
 /**
  * The story view: when you step onto a stone, its story takes over the frame (the 3D stays
  * behind it, dimmed, slowly circling the stone). Layout from the "Открытая история" artboard of
- * the "Вершина России — 250 историй" design: the article, and "Вы здесь" with the mountain of
- * 250 cells, your position and the next opening.
+ * the "Вершина России — 250 историй" design: the article, and "You are here" with the mountain
+ * of 250 cells, your position and the next opening. All text comes from i18n.ts or the story data.
  */
+
+/** A text field: one string, or one per language ({ ru, en, zh, ar }). */
+type Text = string | Localized;
 
 export interface Story {
   n: number;
-  title?: string;
+  title?: Text;
   date?: string;
-  rubric?: string;
-  lead?: string;
-  body?: string[];
-  media?: { type: 'image' | 'video'; src: string; alt?: string; credit?: string };
+  rubric?: Text;
+  lead?: Text;
+  body?: Text[] | Partial<Record<keyof Localized, string[]>>;
+  media?: { type: 'image' | 'video'; src: string; alt?: Text; credit?: Text };
 }
 
 export interface StoriesFile {
@@ -44,14 +48,12 @@ export interface StoryActions {
 // The design's mountain: 29 columns, filled bottom-up, 250 cells.
 const H = [2, 3, 4, 6, 7, 9, 11, 13, 14, 15, 15, 14, 12, 12, 13, 14, 14, 12, 11, 9, 8, 7, 6, 5, 4, 3, 3, 2, 2];
 
-const nf = (n: number) => Math.round(n).toLocaleString('ru-RU');
-const km = (m: number) => (m / 1000).toFixed(1).replace('.', ',');
-function plural(n: number): string {
-  const a = Math.abs(n) % 100, b = a % 10;
-  if (a > 10 && a < 20) return 'историй';
-  if (b === 1) return 'история';
-  if (b >= 2 && b <= 4) return 'истории';
-  return 'историй';
+/** Body paragraphs in the current language (a list of texts, or a list per language). */
+function bodyOf(s?: Story): string[] {
+  const b = s?.body;
+  if (!b) return [];
+  if (Array.isArray(b)) return b.map((p) => loc(p));
+  return b[lang()] ?? b.en ?? b.ru ?? [];
 }
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
@@ -63,6 +65,7 @@ export class StoryView {
   private cells: HTMLButtonElement[] = [];
   private timer?: number;
   private returnFocus?: Element | null;
+  private pos?: Pick<StoryContext, 'elevation' | 'distance' | 'stage'>;
 
   constructor(root: HTMLElement, data: StoriesFile, private readonly a: StoryActions) {
     for (const s of data.stories ?? []) this.stories.set(s.n, s);
@@ -79,25 +82,25 @@ export class StoryView {
         <header class="sv-head">
           <button type="button" class="sv-btn sv-back">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M19 12H5M11 6l-6 6 6 6"/></svg>
-            <span>Назад к горе</span>
+            <span data-i18n="back"></span>
           </button>
-          <div class="sv-brand">Вершина России</div>
-          <nav class="sv-nav" aria-label="Истории">
+          <div class="sv-brand" data-i18n="brand"></div>
+          <nav class="sv-nav" data-i18n-aria="nav.stories">
             <button type="button" class="sv-btn sv-prev"></button>
             <button type="button" class="sv-btn sv-next"></button>
           </nav>
         </header>
         <div class="sv-body">
           <article class="sv-article"></article>
-          <aside class="sv-where" aria-label="Вы здесь">
-            <div class="sv-label">Вы здесь</div>
-            <div class="sv-grid" role="group" aria-label="Гора из 250 историй"></div>
-            <div class="sv-scale"><span>2350 м</span><span class="sv-scale-n"></span><span>5642 м</span></div>
+          <aside class="sv-where" data-i18n-aria="here">
+            <div class="sv-label" data-i18n="here"></div>
+            <div class="sv-grid" dir="ltr" role="group" data-i18n-aria="grid.aria"></div>
+            <div class="sv-scale" dir="ltr"><span class="sv-scale-lo"></span><span class="sv-scale-n"></span><span class="sv-scale-hi"></span></div>
             <div class="sv-pos"></div>
             <div class="sv-next-box">
               <div class="sv-next-label"></div>
               <div class="sv-countdown"></div>
-              <button type="button" class="sv-cta sv-remind">Напомнить об открытии</button>
+              <button type="button" class="sv-cta sv-remind" data-i18n="cta.remind"></button>
             </div>
           </aside>
         </div>
@@ -127,7 +130,7 @@ export class StoryView {
     this.q('.sv-back').addEventListener('click', () => this.a.onClose());
     this.q('.sv-prev').addEventListener('click', () => this.ctx && this.ctx.n > 1 && this.a.onGo(this.ctx.n - 1));
     this.q('.sv-next').addEventListener('click', () => this.ctx && this.ctx.n < this.ctx.total && this.a.onGo(this.ctx.n + 1));
-    this.q('.sv-remind').addEventListener('click', (e) => this.flash(e.currentTarget as HTMLButtonElement, 'Скоро: напоминания'));
+    this.q('.sv-remind').addEventListener('click', (e) => this.flash(e.currentTarget as HTMLButtonElement, t('remindSoon')));
     this.el.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') this.a.onClose();
       else if (e.key === 'ArrowLeft' && this.ctx && this.ctx.n > 1) this.a.onGo(this.ctx.n - 1);
@@ -136,6 +139,15 @@ export class StoryView {
       e.preventDefault();
       e.stopPropagation();
     });
+    onLang(() => {
+      applyI18n(this.el);
+      this.q('.sv-scale-lo').textContent = metres(2350);
+      this.q('.sv-scale-hi').textContent = metres(5642);
+      if (this.isOpen) {
+        this.render();
+        if (this.pos) this.updatePosition(this.pos);
+      }
+    }, true);
   }
 
   get isOpen(): boolean {
@@ -172,13 +184,12 @@ export class StoryView {
     (this.returnFocus as HTMLElement | null)?.focus?.({ preventScroll: true });
   }
 
-  /** Keep "Вы здесь" current while the camera walks to another stone in the background. */
+  /** Keep "You are here" current while the camera walks to another stone in the background. */
   updatePosition(ctx: Pick<StoryContext, 'elevation' | 'distance' | 'stage'>): void {
-    const st = ctx.stage;
-    const stage = st.at ? `Станция «${STATION_RU[st.at] ?? st.at}»`
-      : `Участок ${STATION_RU[st.from ?? ''] ?? '…'} → ${STATION_RU[st.to ?? ''] ?? 'вершина'}`;
-    this.q('.sv-pos').innerHTML = `<div class="sv-alt">${nf(ctx.elevation)}<span> м</span></div>
-      <div class="sv-pos-meta">${km(ctx.distance)} км от Азау</div><div class="sv-pos-stage">${esc(stage)}</div>`;
+    this.pos = ctx;
+    const alt = metres(ctx.elevation).match(/^(.*\d)(\s*\D+)$/);
+    this.q('.sv-pos').innerHTML = `<div class="sv-alt">${esc(alt?.[1] ?? '')}<span>${esc(alt?.[2] ?? '')}</span></div>
+      <div class="sv-pos-meta">${esc(t('fromAzau', { km: km(ctx.distance) }))}</div><div class="sv-pos-stage">${esc(stageText(ctx.stage))}</div>`;
   }
 
   private render(): void {
@@ -188,59 +199,59 @@ export class StoryView {
     this.el.dataset.state = c.state;
     const art = this.q('.sv-article');
     if (open) {
-      const date = s?.date ? new Date(s.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }) : '[ДАТА]';
+      const date = s?.date ? dateLong(s.date) : t('ph.date');
       const media = s?.media
         ? s.media.type === 'video'
           ? `<video src="${esc(s.media.src)}" controls playsinline preload="metadata"></video>`
-          : `<img src="${esc(s.media.src)}" alt="${esc(s.media.alt ?? '')}" loading="lazy">`
-        : '<div class="sv-media-ph">[ФОТО ИЛИ ВИДЕО ИСТОРИИ]</div>';
-      const body = (s?.body?.length ? s.body : ['[Основной текст истории. Достижение, человек, дата, высота, обстоятельства. Объём — на один экран чтения, чтобы историю хотелось дочитать и переслать.]'])
-        .map((p) => `<p>${esc(p)}</p>`).join('');
+          : `<img src="${esc(s.media.src)}" alt="${esc(loc(s.media.alt))}" loading="lazy">`
+        : `<div class="sv-media-ph">${esc(t('ph.media'))}</div>`;
+      const paras = bodyOf(s);
+      const body = (paras.length ? paras : [t('ph.body')]).map((p) => `<p>${esc(p)}</p>`).join('');
       art.innerHTML = `
         <div class="sv-meta">
-          <span class="sv-badge">№ ${c.n}</span>
-          <span class="sv-sub">${c.state === 'last' ? 'Открыта последней' : 'Открыта'} ${esc(date)} · ${esc(s?.rubric ?? '[РУБРИКА]')}</span>
+          <span class="sv-badge">${esc(t('num', { n: num(c.n) }))}</span>
+          <span class="sv-sub">${esc(t(c.state === 'last' ? 'lastOpenedOn' : 'openedOn', { date }))} · ${esc(loc(s?.rubric, t('ph.rubric')))}</span>
         </div>
-        <h1 id="sv-title">${esc(s?.title ?? '[ЗАГОЛОВОК ИСТОРИИ]')}</h1>
-        <figure class="sv-media">${media}${s?.media?.credit ? `<figcaption>${esc(s.media.credit)}</figcaption>` : ''}</figure>
-        <p class="sv-lead">${esc(s?.lead ?? '[Лид: о чём эта история в двух предложениях.]')}</p>
+        <h1 id="sv-title">${esc(loc(s?.title, t('ph.title')))}</h1>
+        <figure class="sv-media">${media}${s?.media?.credit ? `<figcaption>${esc(loc(s.media.credit))}</figcaption>` : ''}</figure>
+        <p class="sv-lead">${esc(loc(s?.lead, t('ph.lead')))}</p>
         <div class="sv-text">${body}</div>
         <div class="sv-actions">
-          <button type="button" class="sv-btn sv-share">Поделиться</button>
-          <button type="button" class="sv-btn sv-copy">Скопировать ссылку</button>
+          <button type="button" class="sv-btn sv-share">${esc(t('share'))}</button>
+          <button type="button" class="sv-btn sv-copy">${esc(t('copyLink'))}</button>
         </div>`;
       art.querySelector('.sv-share')!.addEventListener('click', (e) => this.share(e.currentTarget as HTMLButtonElement, true));
       art.querySelector('.sv-copy')!.addEventListener('click', (e) => this.share(e.currentTarget as HTMLButtonElement, false));
     } else {
-      const ahead = c.n - c.opened - 1;
+      const ahead = plural('ahead', c.n - c.opened - 1);
       art.innerHTML = `
-        <div class="sv-meta"><span class="sv-badge sv-badge--closed">№ ${c.n}</span>
-          <span class="sv-sub">${c.state === 'next' ? 'Открывается следующей' : 'Закрыта'}</span></div>
+        <div class="sv-meta"><span class="sv-badge sv-badge--closed">${esc(t('num', { n: num(c.n) }))}</span>
+          <span class="sv-sub">${esc(t(c.state === 'next' ? 'state.next' : 'state.closed'))}</span></div>
         <div class="sv-locked">
           <svg class="sv-lock" viewBox="0 0 64 64" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"
             d="M20 54 14 30 26 14h12l12 16-6 24z M26 14l6 16 6-16 M14 30h36 M32 30v24"/></svg>
-          <h1 id="sv-title">Эта дверца пока закрыта</h1>
-          <p class="sv-lead">${c.state === 'next'
-            ? 'Это следующая история на пути к вершине. Она откроется совсем скоро.'
-            : `Откроется [ДАТА] в [ВРЕМЯ]. До неё ещё ${ahead} ${plural(ahead)}.`}</p>
+          <h1 id="sv-title">${esc(t('closed.title'))}</h1>
+          <p class="sv-lead">${esc(c.state === 'next'
+            ? t('next.lead')
+            : t('closed.lead', { date: t('ph.date'), time: t('ph.time'), ahead }))}</p>
           <div class="sv-countdown sv-countdown--big" ${c.state === 'next' ? '' : 'hidden'}></div>
-          <button type="button" class="sv-cta sv-remind2">Напомнить об открытии</button>
+          <button type="button" class="sv-cta sv-remind2">${esc(t('cta.remind'))}</button>
         </div>`;
-      art.querySelector('.sv-remind2')!.addEventListener('click', (e) => this.flash(e.currentTarget as HTMLButtonElement, 'Скоро: напоминания'));
+      art.querySelector('.sv-remind2')!.addEventListener('click', (e) => this.flash(e.currentTarget as HTMLButtonElement, t('remindSoon')));
     }
     (this.q('.sv-prev') as HTMLButtonElement).disabled = c.n <= 1;
     (this.q('.sv-next') as HTMLButtonElement).disabled = c.n >= c.total;
-    this.q('.sv-prev').innerHTML = `<span aria-hidden="true">‹</span> № ${Math.max(1, c.n - 1)}`;
-    this.q('.sv-next').innerHTML = `№ ${Math.min(c.total, c.n + 1)} <span aria-hidden="true">›</span>`;
-    this.q('.sv-prev').setAttribute('aria-label', `Предыдущая история, № ${c.n - 1}`);
-    this.q('.sv-next').setAttribute('aria-label', `Следующая история, № ${c.n + 1}`);
-    this.q('.sv-scale-n').textContent = `история № ${c.n}`;
-    this.q('.sv-next-label').textContent = `Следующая дверца, № ${Math.min(c.total, c.opened + 1)}`;
+    this.q('.sv-prev').innerHTML = `<span class="sv-arrow" aria-hidden="true">‹</span> ${esc(t('num', { n: num(Math.max(1, c.n - 1)) }))}`;
+    this.q('.sv-next').innerHTML = `${esc(t('num', { n: num(Math.min(c.total, c.n + 1)) }))} <span class="sv-arrow" aria-hidden="true">›</span>`;
+    this.q('.sv-prev').setAttribute('aria-label', t('prevStory', { n: num(c.n - 1) }));
+    this.q('.sv-next').setAttribute('aria-label', t('nextStory', { n: num(c.n + 1) }));
+    this.q('.sv-scale-n').textContent = t('storyN', { n: num(c.n) });
+    this.q('.sv-next-label').textContent = t('nextStation', { n: num(Math.min(c.total, c.opened + 1)) });
     this.cells.forEach((cell, i) => {
       const n = i + 1;
       cell.dataset.state = c.stateOf(n);
       cell.classList.toggle('is-here', n === c.n);
-      cell.setAttribute('aria-label', `История ${n}`);
+      cell.setAttribute('aria-label', t('storyCell', { n: num(n) }));
       cell.toggleAttribute('aria-current', n === c.n);
     });
     (this.q('.sv-frame') as HTMLElement).scrollTop = 0;
@@ -250,7 +261,7 @@ export class StoryView {
   }
 
   private tick(): void {
-    const text = this.nextOpensAt ? countdown(this.nextOpensAt - Date.now()) : '[ВРЕМЯ]';
+    const text = this.nextOpensAt ? countdown(this.nextOpensAt - Date.now()) : t('ph.time');
     this.el.querySelectorAll('.sv-countdown').forEach((e) => (e.textContent = text));
   }
 
@@ -259,11 +270,11 @@ export class StoryView {
     const label = btn.textContent;
     try {
       if (native && navigator.share) {
-        await navigator.share({ title: `Вершина России · история № ${this.ctx!.n}`, url });
+        await navigator.share({ title: t('shareTitle', { n: num(this.ctx!.n) }), url });
         return;
       }
       await navigator.clipboard.writeText(url);
-      this.flash(btn, 'Ссылка скопирована', label ?? '');
+      this.flash(btn, t('copied'), label ?? '');
     } catch {
       /* cancelled */
     }

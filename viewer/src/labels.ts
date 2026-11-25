@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import type { CollisionGrid, Poi } from './data';
 import { category } from './icons';
+import { lang, loc, metres, onLang } from './i18n';
 
 /** Max distance (m) from the camera at which a label of each category is shown. */
 const LABEL_RANGE: Record<string, number> = {
@@ -23,7 +24,6 @@ export class Labels {
   private selectedId?: string;
   private emphasis = new Set<string>(); // e.g. the stops of the selected route
   private hideNear?: { p: THREE.Vector3; r: number };
-  private lang: 'en' | 'ru' = 'en';
   private readonly tmp = new THREE.Vector3();
 
   constructor(pois: Poi[], onClick: (poi: Poi) => void) {
@@ -31,11 +31,7 @@ export class Labels {
       const el = document.createElement('button');
       el.type = 'button';
       el.className = `poi poi--${poi.category}`;
-      const name = poi.name.en ?? poi.name.ru ?? poi.id;
-      el.setAttribute('aria-label', `${name}, ${category(poi.category).label}, ${poi.elevation_m} m`);
       el.innerHTML = `<span class="poi-box"><span class="poi-row"><span class="poi-icon">${category(poi.category).icon}</span><span class="poi-name"></span></span><span class="poi-ele"></span></span><span class="poi-stem"></span>`;
-      el.querySelector('.poi-name')!.textContent = name;
-      el.querySelector('.poi-ele')!.textContent = `${poi.elevation_m.toLocaleString('en-US')} m`;
       el.addEventListener('click', () => onClick(poi));
       // Keep clicks on labels from starting a camera drag.
       el.addEventListener('pointerdown', (e) => e.stopPropagation());
@@ -48,6 +44,7 @@ export class Labels {
     // Priority order for decluttering: summits, then higher places first.
     const rank = (p: Poi) => (p.category === 'summit' ? 1e5 : 0) + p.elevation_m;
     this.items.sort((a, b) => rank(b.poi) - rank(a.poi));
+    onLang(() => this.relabel(), true);
   }
 
   setSelected(id?: string): void {
@@ -55,15 +52,15 @@ export class Labels {
     for (const { poi, obj } of this.items) obj.element.classList.toggle('is-selected', poi.id === id);
   }
 
-  /** Show Russian or English names. */
-  setLanguage(lang: 'en' | 'ru'): void {
-    if (lang === this.lang) return;
-    this.lang = lang;
+  /** Names and heights in the current language. */
+  private relabel(): void {
     for (const { poi, obj } of this.items) {
-      const name = (lang === 'ru' ? poi.name.ru : poi.name.en) ?? poi.name.en ?? poi.name.ru ?? poi.id;
+      const name = loc(poi.name, poi.id);
       obj.element.querySelector('.poi-name')!.textContent = name;
-      const ele = poi.elevation_m.toLocaleString(lang === 'ru' ? 'ru-RU' : 'en-US');
-      obj.element.querySelector('.poi-ele')!.textContent = lang === 'ru' ? `${ele} м` : `${ele} m`;
+      obj.element.querySelector('.poi-ele')!.textContent = metres(poi.elevation_m);
+      obj.element.setAttribute('aria-label', `${name}, ${category(poi.category).label}, ${metres(poi.elevation_m)}`);
+      obj.element.lang = lang();
+      obj.element.dir = 'auto';
     }
   }
 

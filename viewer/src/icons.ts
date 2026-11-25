@@ -1,26 +1,24 @@
 // Small inline SVG icons (24×24, currentColor) per POI category, plus UI glyphs.
+import { t } from './i18n';
 
 const svg = (body: string) =>
   `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">${body}</svg>`;
 
 export const CATEGORY: Record<string, { label: string; icon: string; order: number }> = {
-  summit: { label: 'Вершина', order: 0, icon: svg('<path fill="currentColor" d="M12 4 21 19H3z"/><path fill="#fff" opacity=".85" d="m12 4 3.2 5.4-1.7-.9-1.5 1.3-1.6-1.3-1.6.9z"/>') },
-  saddle: { label: 'Седловина', order: 1, icon: svg('<path fill="currentColor" d="M2 19 8 7l4 6 4-6 6 12z"/>') },
-  hut: { label: 'Приют', order: 2, icon: svg('<path fill="currentColor" d="M12 3 2 11h3v9h5v-5h4v5h5v-9h3z"/>') },
-  lift: { label: 'Станция канатной дороги', order: 3, icon: svg('<path fill="none" stroke="currentColor" stroke-width="2" d="M2 4l20 4M12 6v4"/><rect x="6" y="10" width="12" height="10" rx="2" fill="currentColor"/><rect x="8" y="12" width="3" height="3" fill="#fff" opacity=".85"/><rect x="13" y="12" width="3" height="3" fill="#fff" opacity=".85"/>') },
-  viewpoint: { label: 'Смотровая точка', order: 4, icon: svg('<path fill="currentColor" d="M12 5C6.5 5 2.7 9.4 1.5 12c1.2 2.6 5 7 10.5 7s9.3-4.4 10.5-7C21.3 9.4 17.5 5 12 5zm0 11a4 4 0 1 1 0-8 4 4 0 0 1 0 8z"/>') },
-  village: { label: 'Посёлок', order: 5, icon: svg('<path fill="currentColor" d="M3 20v-8l5-4 5 4v8H9v-4H7v4zm11 0v-9.5L17.5 8 22 11v9h-3v-3h-2v3z"/>') },
+  summit: { get label() { return t('cat.summit'); }, order: 0, icon: svg('<path fill="currentColor" d="M12 4 21 19H3z"/><path fill="#fff" opacity=".85" d="m12 4 3.2 5.4-1.7-.9-1.5 1.3-1.6-1.3-1.6.9z"/>') },
+  saddle: { get label() { return t('cat.saddle'); }, order: 1, icon: svg('<path fill="currentColor" d="M2 19 8 7l4 6 4-6 6 12z"/>') },
+  hut: { get label() { return t('cat.hut'); }, order: 2, icon: svg('<path fill="currentColor" d="M12 3 2 11h3v9h5v-5h4v5h5v-9h3z"/>') },
+  lift: { get label() { return t('cat.lift'); }, order: 3, icon: svg('<path fill="none" stroke="currentColor" stroke-width="2" d="M2 4l20 4M12 6v4"/><rect x="6" y="10" width="12" height="10" rx="2" fill="currentColor"/><rect x="8" y="12" width="3" height="3" fill="#fff" opacity=".85"/><rect x="13" y="12" width="3" height="3" fill="#fff" opacity=".85"/>') },
+  viewpoint: { get label() { return t('cat.viewpoint'); }, order: 4, icon: svg('<path fill="currentColor" d="M12 5C6.5 5 2.7 9.4 1.5 12c1.2 2.6 5 7 10.5 7s9.3-4.4 10.5-7C21.3 9.4 17.5 5 12 5zm0 11a4 4 0 1 1 0-8 4 4 0 0 1 0 8z"/>') },
+  village: { get label() { return t('cat.village'); }, order: 5, icon: svg('<path fill="currentColor" d="M3 20v-8l5-4 5 4v8H9v-4H7v4zm11 0v-9.5L17.5 8 22 11v9h-3v-3h-2v3z"/>') },
 };
 
-export const DEFAULT_CATEGORY = { label: 'Место', order: 9, icon: svg('<path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5z"/>') };
+export const DEFAULT_CATEGORY = { get label() { return t('cat.place'); }, order: 9, icon: svg('<path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5z"/>') };
 
 export const category = (c: string) => CATEGORY[c] ?? DEFAULT_CATEGORY;
 
-/** Group headings for the list of places. */
-export const CATEGORY_PLURAL: Record<string, string> = {
-  summit: 'Вершины', saddle: 'Седловины', hut: 'Приюты', lift: 'Станции канатных дорог',
-  viewpoint: 'Смотровые точки', village: 'Посёлки',
-};
+/** Group heading for the list of places. */
+export const categoryPlural = (c: string) => (CATEGORY[c] ? t(`cats.${c}`) : t('other'));
 
 export const ICON = {
   close: svg('<path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" d="M6 6l12 12M18 6 6 18"/>'),

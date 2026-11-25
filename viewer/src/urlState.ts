@@ -1,7 +1,7 @@
 // Deep links in the URL hash.
 //   #poi=<id>                                  a selected place
 //   #route=<id>                                a selected route
-//   #door=<n>                                  the guided climb, standing at story point n
+//   #station=<n>                               the guided climb, standing at station n (#door=<n> still works)
 //   #story=<n>                                 the same, with story n open
 //   #view=<lat>,<lon>,<dist m>,<heading°>,<tilt°>   a camera view (target on the ground)
 // heading: compass direction the camera looks toward (0 = north); tilt: 0 = straight down, 90 = horizon.
@@ -9,7 +9,7 @@
 export type UrlState =
   | { kind: 'poi'; id: string }
   | { kind: 'route'; id: string }
-  | { kind: 'door'; n: number }
+  | { kind: 'station'; n: number }
   | { kind: 'story'; n: number }
   | { kind: 'view'; lat: number; lon: number; dist: number; heading: number; tilt: number }
   | { kind: 'none' };
@@ -20,8 +20,9 @@ export function parseHash(hash: string): UrlState {
   if (poi) return { kind: 'poi', id: poi };
   const story = Number(params.get('story'));
   if (params.has('story') && Number.isFinite(story)) return { kind: 'story', n: story };
-  const door = Number(params.get('door'));
-  if (params.has('door') && Number.isFinite(door)) return { kind: 'door', n: door };
+  const stationKey = params.has('station') ? 'station' : params.has('door') ? 'door' : undefined; // door: links from before the rename
+  const station = Number(stationKey && params.get(stationKey));
+  if (stationKey && Number.isFinite(station)) return { kind: 'station', n: station };
   const route = params.get('route');
   if (route) return { kind: 'route', id: route };
   const view = params.get('view');
@@ -35,7 +36,7 @@ export function parseHash(hash: string): UrlState {
 export function formatHash(s: UrlState): string {
   if (s.kind === 'poi') return `#poi=${encodeURIComponent(s.id)}`;
   if (s.kind === 'route') return `#route=${encodeURIComponent(s.id)}`;
-  if (s.kind === 'door') return `#door=${s.n}`;
+  if (s.kind === 'station') return `#station=${s.n}`;
   if (s.kind === 'story') return `#story=${s.n}`;
   if (s.kind === 'view') {
     const h = ((s.heading % 360) + 360) % 360;

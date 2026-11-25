@@ -1,10 +1,11 @@
 import type { Journey } from './data';
 import type { DoorState } from './doors';
-import { STATION_RU, STATION_SHORT_RU } from './climb';
+import { applyI18n, duration, km, LANGS, lang, num, onLang, plural, setLang, stationName, t, type Lang } from './i18n';
 
 /**
- * Climb HUD (Russian, in the "250 stories" style): where you are, up/down, the story card for
- * the current door, and a strip with the whole route's profile, every door and the stations.
+ * Climb HUD (in the "250 stories" style): where you are, up/down, the story card for the
+ * current station, a strip with the whole route's profile, every station and the named stops,
+ * and the mode / look / language switches.
  */
 
 export interface ClimbHudActions {
@@ -26,15 +27,12 @@ export interface ClimbStatus {
   stage: { at?: string; from?: string; to?: string };
 }
 
-const nf = (n: number) => Math.round(n).toLocaleString('ru-RU');
-const km = (m: number) => (m / 1000).toFixed(1).replace('.', ',');
-const walk = (min: number) => {
-  const h = Math.floor(min / 60), m = Math.round(min % 60);
-  return h ? `${h} ч ${m} мин` : `${m} мин`;
-};
-const STATE_RU: Record<DoorState, string> = {
-  open: 'История открыта', last: 'Открыта последней', next: 'Открывается следующей', closed: 'Закрыта',
-};
+/** "Place: Garabashi" or "Mir → Garabashi" for the stops around the current station. */
+export function stageText(st: { at?: string; from?: string; to?: string }): string {
+  return st.at
+    ? t('place.at', { name: stationName(st.at) })
+    : t('place.between', { from: st.from ? stationName(st.from) : '…', to: st.to ? stationName(st.to) : t('summit') });
+}
 
 const ARROW_UP = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="M6 15l6-6 6 6"/></svg>';
 const ARROW_DOWN = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="M6 9l6 6 6-6"/></svg>';
@@ -46,30 +44,37 @@ export class ClimbHud {
   private doorTicks: SVGLineElement[] = [];
   private stripX!: (d: number) => number;
   private lastKey = '';
+  private last?: ClimbStatus;
+  private stripLabels: { b: HTMLButtonElement; id: string }[] = [];
 
   constructor(root: HTMLElement, private readonly j: Journey, private readonly a: ClimbHudActions) {
     this.el = document.createElement('div');
     this.el.className = 'ch';
     this.el.innerHTML = `
-      <div class="ch-modes" role="group" aria-label="Режим">
+      <div class="ch-modes" role="group" data-i18n-aria="mode">
         <div class="ch-seg">
-          <button type="button" data-mode="climb">Подъём</button>
-          <button type="button" data-mode="overview">Вся гора</button>
+          <button type="button" data-mode="climb" data-i18n="mode.climb"></button>
+          <button type="button" data-mode="overview" data-i18n="mode.overview"></button>
         </div>
         <div class="ch-seg">
-          <button type="button" data-look="digital">Цифровой</button>
-          <button type="button" data-look="satellite">Спутник</button>
+          <button type="button" data-look="digital" data-i18n="look.digital"></button>
+          <button type="button" data-look="satellite" data-i18n="look.satellite"></button>
         </div>
+        <label class="ch-seg ch-lang">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path fill="none" stroke="currentColor" stroke-width="1.8" d="M3 12h18M12 3c2.6 2.6 3.8 5.6 3.8 9s-1.2 6.4-3.8 9c-2.6-2.6-3.8-5.6-3.8-9S9.4 5.6 12 3z"/></svg>
+          <span class="ch-lang-v"></span>
+          <select data-i18n-aria="lang.label">${LANGS.map((l) => `<option value="${l.id}" lang="${l.id}">${l.name}</option>`).join('')}</select>
+        </label>
       </div>
       <section class="ch-status" aria-live="polite">
-        <div class="ch-door">Дверца <b class="ch-num"></b><span class="ch-of"></span></div>
-        <div class="ch-alt"><span class="ch-alt-v"></span><span class="ch-alt-u"> м</span></div>
+        <div class="ch-door"><span data-i18n="station"></span> <b class="ch-num"></b><span class="ch-of"></span></div>
+        <div class="ch-alt"><span class="ch-alt-v"></span><span class="ch-alt-u"></span></div>
         <div class="ch-meta"></div>
         <div class="ch-stage"></div>
       </section>
       <div class="ch-nav">
-        <button type="button" class="ch-up" aria-label="Выше, к следующей дверце">${ARROW_UP}<span>Выше</span></button>
-        <button type="button" class="ch-down" aria-label="Ниже, к предыдущей дверце">${ARROW_DOWN}<span>Ниже</span></button>
+        <button type="button" class="ch-up" data-i18n-aria="up.aria">${ARROW_UP}<span data-i18n="up"></span></button>
+        <button type="button" class="ch-down" data-i18n-aria="down.aria">${ARROW_DOWN}<span data-i18n="down"></span></button>
       </div>
       <article class="ch-card">
         <div class="ch-card-n"></div>
@@ -80,7 +85,8 @@ export class ClimbHud {
           <button type="button" class="ch-card-cta"></button>
         </div>
       </article>
-      <figure class="ch-strip" aria-label="Маршрут: профиль высоты и все дверцы"></figure>`;
+      <figure class="ch-strip" dir="ltr" data-i18n-aria="strip.aria"></figure>`;
+    applyI18n(this.el);
     root.appendChild(this.el);
     for (const ev of ['pointerdown', 'wheel', 'touchstart'] as const) {
       this.el.addEventListener(ev, (e) => { if (e.target !== this.el) e.stopPropagation(); }, { passive: true });
@@ -93,7 +99,24 @@ export class ClimbHud {
     this.$('.ch-card-cta').addEventListener('click', () => a.onRead());
     this.holdButton(this.$('.ch-up'), +1);
     this.holdButton(this.$('.ch-down'), -1);
+    const select = this.$<HTMLSelectElement>('.ch-lang select');
+    select.addEventListener('change', () => setLang(select.value as Lang));
     this.buildStrip();
+    onLang(() => this.relabel(), true);
+  }
+
+  /** Re-apply the current language to everything this HUD shows. */
+  private relabel(): void {
+    applyI18n(this.el);
+    const info = LANGS.find((l) => l.id === lang())!;
+    this.$('.ch-lang-v').textContent = info.short;
+    this.$<HTMLSelectElement>('.ch-lang select').value = info.id;
+    for (const { b, id } of this.stripLabels) {
+      b.textContent = stationName(id, true);
+      b.title = stationName(id);
+    }
+    this.lastKey = '';
+    if (this.last) this.update(this.last);
   }
 
   setMode(mode: 'climb' | 'overview'): void {
@@ -113,14 +136,14 @@ export class ClimbHud {
   }
 
   update(s: ClimbStatus): void {
-    this.$('.ch-num').textContent = `№ ${s.door}`;
-    this.$('.ch-of').textContent = ` / ${s.total}`;
-    this.$('.ch-alt-v').textContent = nf(s.elevation);
-    this.$('.ch-meta').textContent = `${km(s.distance)} км от Азау · ≈ ${walk(s.walkMinutes)} пешком`;
-    const st = s.stage;
-    this.$('.ch-stage').textContent = st.at
-      ? `Станция «${STATION_RU[st.at] ?? st.at}»`
-      : `Участок ${STATION_RU[st.from ?? ''] ?? '…'} → ${STATION_RU[st.to ?? ''] ?? 'вершина'}`;
+    this.last = s;
+    this.$('.ch-num').textContent = num(s.door);
+    this.$('.ch-of').textContent = ` / ${num(s.total)}`;
+    const [altV, altU] = splitUnit(t('unit.m', { v: num(s.elevation) }));
+    this.$('.ch-alt-v').textContent = altV;
+    this.$('.ch-alt-u').textContent = altU;
+    this.$('.ch-meta').textContent = `${t('fromAzau', { km: km(s.distance) })} · ${t('walk', { t: duration(s.walkMinutes) })}`;
+    this.$('.ch-stage').textContent = stageText(s.stage);
     this.marker.setAttribute('transform', `translate(${this.stripX(s.distance).toFixed(1)},0)`);
 
     const key = `${s.door}|${s.state}|${s.opened}`;
@@ -128,16 +151,16 @@ export class ClimbHud {
     this.lastKey = key;
     const card = this.$<HTMLElement>('.ch-card');
     card.dataset.state = s.state;
-    this.$('.ch-card-n').textContent = `№ ${s.door}`;
-    this.$('.ch-card-state').textContent = STATE_RU[s.state];
+    this.$('.ch-card-n').textContent = t('num', { n: num(s.door) });
+    this.$('.ch-card-state').textContent = t(`state.${s.state}`);
     const isOpen = s.state === 'open' || s.state === 'last';
-    this.$('.ch-card-title').textContent = isOpen ? '[ЗАГОЛОВОК ИСТОРИИ]' : 'Эта дверца пока закрыта';
+    this.$('.ch-card-title').textContent = isOpen ? t('ph.title') : t('closed.title');
     this.$('.ch-card-text').textContent = isOpen
-      ? '[Одна-две строки анонса истории: кто, когда, что произошло на Эльбрусе.]'
+      ? t('ph.teaser')
       : s.state === 'next'
-        ? 'Откроется через [ВРЕМЯ]. Следующая история на пути к вершине.'
-        : `Откроется [ДАТА]. До неё ещё ${s.door - s.opened - 1} ${plural(s.door - s.opened - 1)}.`;
-    this.$('.ch-card-cta').textContent = isOpen ? 'Читать историю' : 'Напомнить об открытии';
+        ? t('next.teaser', { time: t('ph.time') })
+        : t('closed.teaser', { date: t('ph.date'), ahead: plural('ahead', s.door - s.opened - 1) });
+    this.$('.ch-card-cta').textContent = isOpen ? t('cta.read') : t('cta.remind');
   }
 
   private holdButton(btn: HTMLButtonElement, delta: number): void {
@@ -150,7 +173,7 @@ export class ClimbHud {
       e.preventDefault();
       this.a.onStep(delta);
       stop();
-      // Hold to keep climbing: one door every 0.28 s after a short delay.
+      // Hold to keep climbing: one station every 0.28 s after a short delay.
       timer = window.setTimeout(() => (timer = window.setInterval(() => this.a.onStep(delta), 280)), 380);
     });
     for (const ev of ['pointerup', 'pointerleave', 'pointercancel'] as const) btn.addEventListener(ev, stop);
@@ -211,8 +234,7 @@ export class ClimbHud {
     for (const s of kept) {
       const b = document.createElement('button');
       b.type = 'button';
-      b.textContent = STATION_SHORT_RU[s.id] ?? s.id;
-      b.title = STATION_RU[s.id] ?? s.id;
+      this.stripLabels.push({ b, id: s.id });
       b.style.left = `${(X(s.d) / W) * 100}%`;
       b.addEventListener('click', () => {
         let best = 1, bd = Infinity;
@@ -234,10 +256,8 @@ export class ClimbHud {
   }
 }
 
-function plural(n: number): string {
-  const a = Math.abs(n) % 100, b = a % 10;
-  if (a > 10 && a < 20) return 'историй';
-  if (b === 1) return 'история';
-  if (b >= 2 && b <= 4) return 'истории';
-  return 'историй';
+/** Split "3 516 м" into the number and the unit, so the unit can be set smaller. */
+function splitUnit(s: string): [string, string] {
+  const m = s.match(/^(.*\d)(\s*\D+)$/);
+  return m ? [m[1], m[2]] : [s, ''];
 }

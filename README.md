@@ -21,7 +21,8 @@ Built from open data (Copernicus DEM, Sentinel-2, OpenStreetMap) and rendered wi
 ## Status
 
 **Direction v2:** the model is now the stage of the "250 stories" site. There's a guided climb past
-250 story doors along the southern route, in a synthwave digital look (satellite as a toggle).
+250 story stations along the southern route, in a synthwave digital look (satellite as a toggle).
+The interface speaks Russian, English, Chinese and Arabic (`viewer/src/i18n.ts`).
 See [PLAN.md §0](PLAN.md#0-direction-v2-26-nov-2026-the-3d-climb-of-вершина-россии--250-историй) and [docs/climb-v2.md](docs/climb-v2.md).
 
 The map-style model built in phases 1–5 is the "whole mountain" overview mode. Its results are in

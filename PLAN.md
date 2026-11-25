@@ -21,7 +21,13 @@ time from Azau (№ 1) to the West Summit (№ 250). The map-style orbiting belo
   stones with the light show on the ground (rune circles, pulses), states as in the design.
   Camera: orbit 360° around the current point with zoom. Sky: sun, moon, turning stars, and
   night turning into dawn as you climb (round 3, see docs/climb-v2.md).
-- Russian UI (Unbounded / Onest / JetBrains Mono), deep link `#door=<n>`, `?opened=<count>`.
+- **Four languages:** Russian, English, Chinese and Arabic (right-to-left), switched live from the
+  top bar; `?lang=ru|en|zh|ar`, else the saved choice, else the browser. Deep links
+  `#station=<n>` (old `#door=<n>` links still work), `#story=<n>`, `?opened=<count>`.
+
+**Naming:** the 250 points are **станции / stations** everywhere users see them (they were "doors"
+in the first rounds). Inside the code the climb still calls them `door` (`doors.ts`, `journey.doors`),
+because `stations` already names the stops along the route (Azau, Mir, Garabashi…).
 
 Built in this round: `viewer/src/{synthwave,doors,climb,climbHud}.ts` and the `journey` export in
 `pipeline/build_web.py` (config `journey:`). Results: [docs/climb-v2.md](docs/climb-v2.md).

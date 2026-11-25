@@ -16,6 +16,7 @@ import { Labels } from './labels';
 import { Routes } from './routes';
 import { Panel } from './panel';
 import { createSky, SKY } from './sky';
+import { metres } from './i18n';
 import { createHud, type Hud } from './hud';
 import { formatHash, parseHash, writeHash, type UrlState } from './urlState';
 
@@ -123,6 +124,9 @@ export class ElbrusMap {
     // 'clip' instead of the renderer's default 'hidden': a hidden-overflow box is still a
     // scroll container, and focusing a clicked label would scroll it, shifting every label.
     this.labelRenderer.domElement.style.overflow = 'clip';
+    // Labels are placed by transform from the layer's top-left; in right-to-left pages an
+    // absolutely placed element would start from the right edge instead.
+    this.labelRenderer.domElement.dir = 'ltr';
     container.appendChild(this.labelRenderer.domElement);
 
     this.scene.fog = new THREE.Fog(SKY.horizon, 30000, 200000);
@@ -214,7 +218,6 @@ export class ElbrusMap {
     this.routes.setResolution(this.size.w, this.size.h);
     this.scene.add(this.routes.group);
     this.labels = new Labels(m.pois, (poi) => this.select(poi));
-    this.labels.setLanguage('ru');
     this.scene.add(this.labels.group);
     this.panel = new Panel(this.container, m.pois, this.routeList, {
       onSelect: (poi) => this.select(poi),
@@ -276,7 +279,7 @@ export class ElbrusMap {
       // Default: start the climb at the bottom, at Azau.
       if (this.climb) this.enterClimb(1, false);
       else await this.controls.setLookAt(pos.x, pos.y, pos.z, target.x, target.y, target.z, false);
-    } else if (fromUrl.kind !== 'door') {
+    } else if (fromUrl.kind !== 'station') {
       this.setMode('overview');
     }
 
@@ -392,7 +395,6 @@ export class ElbrusMap {
       this.select(undefined);
       this.panel?.close();
       if (this.climb) this.labels?.setEmphasis(this.climb.j.stations.map((st) => st.id));
-      this.labels?.setLanguage('ru');
     } else {
       c.minDistance = 800;
       c.maxDistance = 90000;
@@ -577,7 +579,7 @@ export class ElbrusMap {
 
   private currentUrlState(): UrlState {
     if (this.storyView?.current) return { kind: 'story', n: this.storyView.current };
-    if (this.mode === 'climb' && this.climb) return { kind: 'door', n: this.climb.door };
+    if (this.mode === 'climb' && this.climb) return { kind: 'station', n: this.climb.door };
     if (this.selected) return { kind: 'poi', id: this.selected.id };
     if (this.selectedRoute) return { kind: 'route', id: this.selectedRoute.id };
     if (!this.geo) return { kind: 'none' };
@@ -601,7 +603,7 @@ export class ElbrusMap {
       this.openStory(s.n);
       return true;
     }
-    if (s.kind === 'door') {
+    if (s.kind === 'station') {
       this.closeStory();
       if (!this.climb) return false;
       if (this.mode === 'climb') this.goToDoor(s.n);
@@ -752,7 +754,7 @@ export class ElbrusMap {
     const hit = this.tiles.raycast(this.raycaster);
     if (!hit) return this.hud.setHover(null);
     const [lon, lat] = this.geo.toLonLat(hit.point.x, hit.point.z);
-    this.hud.setHover(`▲ ${Math.round(hit.point.y).toLocaleString('ru-RU')} м · ${formatLatLon(lon, lat)}`);
+    this.hud.setHover(`▲ ${metres(hit.point.y)} · ${formatLatLon(lon, lat)}`);
   }
 
   // --- frame loop ------------------------------------------------------------------------

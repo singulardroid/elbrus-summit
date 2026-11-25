@@ -1,5 +1,24 @@
 # Direction v2: the 3D climb
 
+## Round 5 (2026-11-26): stations and four languages
+
+- **Станция / station** replaces "дверца / door" in everything users see: the HUD ("Станция 88 / 250"),
+  the story card and view ("Эта станция пока закрыта"), labels and links (`#station=88`; old
+  `#door=` links still open). The line under the altitude now names the nearby stop as a place
+  ("Место: Гарабаши", "Участок Мир → Гарабаши") so it doesn't clash with the word "station".
+- **Languages:** Russian, English, Chinese, Arabic. A language button sits next to the look switch.
+  Switching is live (no reload) and remembered; `?lang=` sets it in a link.
+  - All interface text is in `viewer/src/i18n.ts`, with plural rules per language and local
+    number formats (Arabic uses Western digits, like the stone numbers).
+  - Arabic turns the page right-to-left and loads Noto Sans Arabic. Charts (the route strip,
+    the mountain of 250 cells, the elevation profile) stay left-to-right.
+  - Content can be given per language: place and route names and descriptions, and every story
+    field in `content/stories.json` (`"title": {"ru": "…", "en": "…", "zh": "…", "ar": "…"}`).
+    A missing language falls back to English, then Russian. The panel shows the Russian name
+    under the title for other languages.
+- Chinese and Arabic place and route texts are machine-drafted and need a native speaker's review.
+
+
 ## Round 4 (2026-11-26): the story view
 
 When you step onto a stone, its story takes over the frame. The 3D stays behind it, dimmed and

@@ -13,11 +13,68 @@ export type StoneShape = 'rune' | 'obelisk' | 'slab' | 'twin' | 'boulder' | 'men
 const SHAPES: StoneShape[] = ['rune', 'obelisk', 'slab', 'twin', 'boulder', 'menhir'];
 
 export const STATE_COLOR: Record<DoorState, number> = {
-  open: 0xffd9a8, // warm, steady
+  open: 0xffb85c, // warm amber, steady
   last: 0xff7a3d, // dawn orange
   next: 0xff4fd8, // magenta
-  closed: 0x8f9dff, // cool violet-blue
+  closed: 0x7d8cff, // cool violet-blue, breathing
 };
+
+/**
+ * How a stone's inner light behaves: open stories glow steadily, the newest a little brighter,
+ * the next one pulses, closed ones slowly fade down and come back.
+ */
+function glowAt(state: DoorState, time: number, phase: number): number {
+  switch (state) {
+    case 'open': return 0.85;
+    case 'last': return 1.0 + 0.08 * Math.sin(time * 1.6 + phase);
+    case 'next': return 0.7 + 0.3 * Math.sin(time * 2.6 + phase);
+    case 'closed': return 0.62 + 0.3 * Math.sin(time * 1.4 + phase); // ~4.5 s per breath
+  }
+}
+
+/** Faceted stone lit from within: the state colour glows through, brighter at the rim and top. */
+function stoneMaterial(color: THREE.Color): THREE.ShaderMaterial {
+  return new THREE.ShaderMaterial({
+    uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {
+      color: { value: color.clone() }, glow: { value: 0.8 }, height: { value: 1.5 },
+    }]),
+    vertexShader: /* glsl */ `
+      varying vec3 vWorld;
+      varying float vY;
+      #include <common>
+      #include <fog_pars_vertex>
+      void main() {
+        vY = position.y;
+        vec4 wp = modelMatrix * vec4(position, 1.0);
+        vWorld = wp.xyz;
+        vec4 mvPosition = viewMatrix * wp;
+        gl_Position = projectionMatrix * mvPosition;
+        #include <fog_vertex>
+      }`,
+    fragmentShader: /* glsl */ `
+      uniform vec3 color;
+      uniform float glow, height;
+      varying vec3 vWorld;
+      varying float vY;
+      #include <common>
+      #include <fog_pars_fragment>
+      void main() {
+        vec3 n = normalize(cross(dFdx(vWorld), dFdy(vWorld)));
+        vec3 v = normalize(cameraPosition - vWorld);
+        if (dot(n, v) < 0.0) n = -n;
+        // Each facet a slightly different shade, so the stone stays faceted while glowing.
+        float facet = 0.55 + 0.45 * abs(dot(n, normalize(vec3(0.4, 0.8, 0.45))));
+        float rim = pow(1.0 - max(dot(n, v), 0.0), 2.0);
+        float up = smoothstep(-0.2, height, vY);
+        vec3 body = color * (0.28 + 0.45 * facet + 0.35 * up);
+        vec3 c = mix(color * 0.3, body, glow) + color * rim * 0.55 * glow + vec3(1.0) * rim * 0.12 * glow;
+        gl_FragColor = vec4(c, 1.0);
+        #include <colorspace_fragment>
+        #include <fog_fragment>
+      }`,
+    fog: true,
+  });
+}
 
 function hash(n: number): number {
   let x = (n * 2654435761) >>> 0;
@@ -129,16 +186,19 @@ class Stone {
   private readonly beam?: THREE.Mesh<THREE.CylinderGeometry, THREE.MeshBasicMaterial>;
   private readonly phase: number;
   private readonly color: THREE.Color;
+  private readonly body: THREE.ShaderMaterial;
 
   constructor(readonly door: JourneyDoor, shape: StoneShape, readonly state: DoorState, private reached: boolean, scale: number) {
     this.phase = rand01(door.n) * 6.283;
     this.color = new THREE.Color(STATE_COLOR[state]);
     const { parts, top } = stoneGeometry(shape, door.n * 31);
-    const rock = new THREE.MeshLambertMaterial({ color: 0x2b2452, flatShading: true });
+    this.body = stoneMaterial(this.color);
+    this.body.uniforms.height.value = top;
+    const edgeColor = this.color.clone().lerp(new THREE.Color(0xffffff), 0.45);
     for (const g of parts) {
-      this.group.add(new THREE.Mesh(g, rock));
+      this.group.add(new THREE.Mesh(g, this.body));
       const e = new THREE.LineSegments(new THREE.EdgesGeometry(g, 25), new THREE.LineBasicMaterial({
-        color: this.color, transparent: true, opacity: 0.7,
+        color: edgeColor, transparent: true, opacity: 0.7,
       }));
       this.edges.push(e);
       this.group.add(e);
@@ -183,9 +243,11 @@ class Stone {
   }
 
   update(time: number, pixelRatio: number): void {
-    // Reached: steady. Ahead: a breathing pulse, offset per stone.
+    // Inner light by story state (steady / pulsing / slowly breathing).
+    const glow = glowAt(this.state, time, this.phase);
+    this.body.uniforms.glow.value = glow;
+    for (const e of this.edges) e.material.opacity = 0.35 + 0.5 * glow;
     const pulse = this.reached ? 1 : 0.5 + 0.5 * Math.sin(time * 2.4 + this.phase);
-    for (const e of this.edges) e.material.opacity = this.reached ? 0.75 : 0.3 + 0.55 * pulse;
     (this.label.material as THREE.SpriteMaterial).opacity = this.reached ? 0.95 : 0.6 + 0.4 * pulse;
     this.label.position.y = this.top / this.group.scale.y - 1.2 + 0.75 + Math.sin(time * 1.2 + this.phase) * 0.08;
     const su = this.sparks.material.uniforms;

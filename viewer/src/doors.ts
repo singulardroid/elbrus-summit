@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { num, t } from './i18n';
 import { Line2 } from 'three/addons/lines/Line2.js';
 import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
@@ -146,7 +147,7 @@ export class Doors {
         b.n = n;
         b.el.innerHTML = `<span>${n}</span>`;
         b.el.dataset.state = this.stateOf(n);
-        b.el.setAttribute('aria-label', `Дверца ${n}`);
+        b.el.setAttribute('aria-label', t('stationN', { n: num(n) }));
       }
       b.el.classList.toggle('is-current', n === current);
       b.obj.position.copy(p);
