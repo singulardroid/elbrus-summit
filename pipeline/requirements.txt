@@ -1,0 +1,9 @@
+numpy==2.5.5
+pillow==13.0.0
+pydelatin==0.4.0
+pyproj==3.8.0
+pystac-client==0.9.1
+PyYAML==6.0.4
+rasterio==1.5.2
+requests==2.34.2
+shapely==2.2.0
