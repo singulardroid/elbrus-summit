@@ -546,6 +546,11 @@ export function applyDocument(): void {
 const fill = (s: string, p?: Record<string, string | number>) =>
   p ? s.replace(/\{(\w+)\}/g, (m, k) => (k in p ? String(p[k]) : m)) : s;
 
+/** Add strings from another module (e.g. the tour), per language. */
+export function addStrings(more: Partial<Record<Lang, Dict>>): void {
+  for (const l of Object.keys(more) as Lang[]) Object.assign(STR[l], more[l]);
+}
+
 export function t(key: string, params?: Record<string, string | number>): string {
   return fill(STR[current][key] ?? STR.en[key] ?? STR.ru[key] ?? key, params);
 }

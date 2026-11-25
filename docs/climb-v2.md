@@ -1,5 +1,31 @@
 # Direction v2: the 3D climb
 
+## Round 6 (2026-11-26): the first-visit guide
+
+- **First visit** (nothing saved in the browser, and not arriving by a shared station, story or
+  place link): the site opens on the whole mountain, turning slowly, with a welcome card in the
+  visitor's language. It says what the site is and offers the four languages,
+  "Show me around" and "Skip, go to station 1".
+- **The tour** (`viewer/src/tour.ts`), 10 steps with Back / Next (← → keys, Esc closes):
+  1. the whole mountain and how to move it (mouse or touch wording)
+  2. the places list, compass and reset
+  3. Climb / Whole mountain
+  4. Digital / Satellite
+  5. language
+  6. then it walks down to station 1: where you are (status)
+  7. the stones and what their colours mean
+  8. Up / Down
+  9. the story card
+  10. the route strip
+
+  Each step spotlights its control and puts the card beside it. The overlay lets clicks
+  through, so people can try each control as it is explained. Every step has
+  "Go to station 1".
+- **The finish:** "Start at station 1" (the first story opens) or "Newest story: No. 87".
+- **Afterwards:** the guide is remembered and doesn't come back by itself. The **?** button in
+  the top bar replays it, and `?tour` in a link forces it.
+
+
 ## Round 5 (2026-11-26): stations and four languages
 
 - **Станция / station** replaces "дверца / door" in everything users see: the HUD ("Станция 88 / 250"),

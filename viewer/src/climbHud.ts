@@ -14,6 +14,7 @@ export interface ClimbHudActions {
   onMode(mode: 'climb' | 'overview'): void;
   onLook(look: 'digital' | 'satellite'): void;
   onRead(): void;
+  onHelp(): void;
 }
 
 export interface ClimbStatus {
@@ -65,6 +66,7 @@ export class ClimbHud {
           <span class="ch-lang-v"></span>
           <select data-i18n-aria="lang.label">${LANGS.map((l) => `<option value="${l.id}" lang="${l.id}">${l.name}</option>`).join('')}</select>
         </label>
+        <div class="ch-seg ch-help"><button type="button" data-i18n-aria="tour.help" data-i18n-title="tour.help">?</button></div>
       </div>
       <section class="ch-status" aria-live="polite">
         <div class="ch-door"><span data-i18n="station"></span> <b class="ch-num"></b><span class="ch-of"></span></div>
@@ -97,6 +99,7 @@ export class ClimbHud {
     this.el.querySelectorAll<HTMLButtonElement>('[data-look]').forEach((b) =>
       b.addEventListener('click', () => a.onLook(b.dataset.look as 'digital' | 'satellite')));
     this.$('.ch-card-cta').addEventListener('click', () => a.onRead());
+    this.$('.ch-help button').addEventListener('click', () => a.onHelp());
     this.holdButton(this.$('.ch-up'), +1);
     this.holdButton(this.$('.ch-down'), -1);
     const select = this.$<HTMLSelectElement>('.ch-lang select');

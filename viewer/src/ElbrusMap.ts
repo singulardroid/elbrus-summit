@@ -17,6 +17,7 @@ import { Routes } from './routes';
 import { Panel } from './panel';
 import { createSky, SKY } from './sky';
 import { metres } from './i18n';
+import { Tour, tourSeen } from './tour';
 import { createHud, type Hud } from './hud';
 import { formatHash, parseHash, writeHash, type UrlState } from './urlState';
 
@@ -80,6 +81,9 @@ export class ElbrusMap {
   private readonly openedFromUrl: boolean;
   private storyView?: StoryView;
   private userMoved = false; // auto-open stories only after the visitor has moved
+  private tour?: Tour;
+  private tourActive = false; // the first-visit guide is on screen: no stories open by themselves
+  private idleSpin = false; // the overview turns slowly behind the guide's welcome
   private restSince = 0;
   private storyShownFor = 0;
   private doors?: Doors;
@@ -155,6 +159,7 @@ export class ElbrusMap {
     this.controls.addEventListener('update', () => (this.dirty = true));
     this.controls.addEventListener('controlstart', () => {
       this.interacting = true;
+      this.idleSpin = false;
       this.hud.setHover(null);
     });
     this.controls.addEventListener('controlend', () => {
@@ -248,6 +253,7 @@ export class ElbrusMap {
         onMode: (mode) => (mode === 'climb' ? this.enterClimb(this.climb!.door) : this.enterOverview()),
         onLook: (look) => this.setLook(look),
         onRead: () => this.openStory(this.climb!.door),
+        onHelp: () => this.tour?.start(),
       });
       this.storyView = new StoryView(this.container, stories, {
         onClose: () => this.closeStory(),
@@ -258,6 +264,22 @@ export class ElbrusMap {
       this.stones = new Stones(m.journey.doors, (n) => this.doors!.stateOf(n), (x, z) => this.groundAt(x, z));
       this.scene.add(this.stones.group);
       this.rig = new ClimbRig(this.camera, this.renderer.domElement, (x, z) => this.groundAt(x, z), () => (this.dirty = true));
+      this.tour = new Tour(this.container, {
+        showMountain: () => this.showMountain(),
+        showStation: (n) => {
+          this.closeStory();
+          this.enterClimb(n);
+        },
+        walkTo: (n) => {
+          if (this.mode !== 'climb') this.enterClimb(n);
+          this.goToDoor(n);
+        },
+        opened: () => this.opened,
+        setActive: (on) => {
+          this.tourActive = on;
+          if (!on) this.idleSpin = false;
+        },
+      });
     }
     this.applyLook();
 
@@ -275,7 +297,13 @@ export class ElbrusMap {
     this.home = { pos, target };
 
     const fromUrl = this.urlState ? parseHash(location.hash) : { kind: 'none' as const };
-    if (!this.applyUrlState(fromUrl, false)) {
+    // First visit (no shared link to follow): the mountain view and the guide. `?tour` forces it.
+    const wantTour = !!this.tour && (new URLSearchParams(location.search).has('tour') || (!tourSeen() && fromUrl.kind === 'none'));
+    if (wantTour) {
+      this.setMode('overview');
+      await this.controls.setLookAt(pos.x, pos.y, pos.z, target.x, target.y, target.z, false);
+      this.idleSpin = true;
+    } else if (!this.applyUrlState(fromUrl, false)) {
       // Default: start the climb at the bottom, at Azau.
       if (this.climb) this.enterClimb(1, false);
       else await this.controls.setLookAt(pos.x, pos.y, pos.z, target.x, target.y, target.z, false);
@@ -287,6 +315,21 @@ export class ElbrusMap {
     await this.waitForFirstView();
     this.hud.setProgress(1);
     this.hud.hideLoading();
+    if (wantTour) this.tour!.start();
+  }
+
+  /** The whole mountain from the home view, turning slowly (the guide's backdrop). */
+  private showMountain(): void {
+    if (!this.home) return;
+    this.closeStory();
+    if (this.mode === 'climb') this.enterOverview();
+    else {
+      this.select(undefined);
+      this.panel?.close();
+      const { pos, target } = this.home;
+      void this.controls.setLookAt(pos.x, pos.y, pos.z, target.x, target.y, target.z, true);
+    }
+    this.idleSpin = true;
   }
 
   // --- public actions --------------------------------------------------------------------
@@ -776,6 +819,7 @@ export class ElbrusMap {
     const dt = Math.min(this.timer.getDelta(), 0.1);
     const time = performance.now() / 1000;
     const climbing = this.mode === 'climb' && !!this.climb && !!this.rig;
+    if (!climbing && this.idleSpin && !this.interacting) this.controls.rotate(dt * 0.045, 0, true);
     if (!climbing && this.controls.update(dt)) this.dirty = true;
     if (this.look === 'digital') this.dirty = true; // the sky, portals and trail are animated
     if (climbing && this.climb!.update(dt)) this.dirty = true;
@@ -795,7 +839,7 @@ export class ElbrusMap {
       const walking = c.moving;
       // Step onto a stone and its story opens (after a short rest, once the visitor has moved).
       if (walking) this.restSince = time;
-      else if (this.userMoved && this.storyShownFor !== c.door && time - this.restSince > 0.6 && !this.storyView?.isOpen) {
+      else if (this.userMoved && !this.tourActive && this.storyShownFor !== c.door && time - this.restSince > 0.6 && !this.storyView?.isOpen) {
         this.storyShownFor = c.door;
         const st = this.doors?.stateOf(c.door);
         if (st === 'open' || st === 'last') this.openStory(c.door); // closed ones: the card says so

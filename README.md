@@ -6,7 +6,7 @@ Visitors can orbit, pan and zoom on desktop and mobile, and click points of inte
 Built from open data (Copernicus DEM, Sentinel-2, OpenStreetMap) and rendered with Three.js.
 
 **Live preview:** https://singulardroid.github.io/elbrus-summit/ (try `?lang=en`, `?lang=zh`,
-`?lang=ar`, or a station: `#station=87`). Publish an update with `./scripts/deploy-pages.sh`:
+`?lang=ar`, a station: `#station=87`, or the first-visit guide again: `?tour`). Publish an update with `./scripts/deploy-pages.sh`:
 it builds the viewer with the local 3D data and replaces the `gh-pages` branch.
 
 - **Plan & architecture:** [PLAN.md](PLAN.md)
