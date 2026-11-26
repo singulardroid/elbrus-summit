@@ -11,3 +11,4 @@ $PY fetch_osm.py
 $PY previews.py
 $PY build_routes.py
 $PY build_web.py
+$PY build_horizon.py

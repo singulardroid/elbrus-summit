@@ -28,6 +28,7 @@ No API keys are needed. Everything is fetched from public endpoints.
 | 4. Checks | `previews.py` | `work/previews/{hillshade,imagery,overlay}.png`, `report.json` (exit 1 if the DEM fails the sanity check) |
 | 5. Routes | `build_routes.py` | `content/routes.geojson` from `content/routes.yaml` + OSM ways (oriented, joined, gaps reported) |
 | 6. Web export | `build_web.py` | `build/elbrus/`: `manifest.json`, `tiles/<L>-<x>-<y>.{glb,webp}` (85-tile quadtree, meshopt-compressed meshes with DEM normals and skirts, WebP textures with gutters), `collision.bin`. Places come from `content/pois.geojson`, routes from `content/routes.geojson` (draped on the DEM, with stats and profile). Tile levels are set in `config.yaml` → `tiles`. `--skip-tiles` refreshes only the manifest after content edits |
+| 7. Horizon | `build_horizon.py` | `build/elbrus/horizon.{json,bin}`: the land around the block (two rings of real heights, ~120 km at ~400 m and ~360 km at ~2 km), read at low resolution from the public Copernicus GLO-90 files on AWS. Needs `manifest.json` from step 6 |
 
 Useful flags:
 - `fetch_imagery.py --list` ranks candidate dates by clear-sky coverage of the area (and snow fraction).

@@ -388,3 +388,73 @@ export function updateNightSky(sky: THREE.Group, camera: THREE.Camera, time: num
   m.uniforms.time.value = time;
   m.uniforms.pixelRatio.value = pixelRatio;
 }
+
+/**
+ * Digital look for the land around the block (horizon.ts): the same palette, facets, contour lines
+ * and light as the terrain tiles, with snow by height (there is no satellite photo out there).
+ */
+export function createApronMaterial(): THREE.ShaderMaterial {
+  const mat = new THREE.ShaderMaterial({
+    uniforms: THREE.UniformsUtils.merge([
+      THREE.UniformsLib.fog,
+      {
+        cLow: { value: SYNTH.low }, cMid: { value: SYNTH.mid }, cHigh: { value: SYNTH.high },
+        cSnow: { value: SYNTH.snow }, cRim: { value: SYNTH.rim },
+        cContour: { value: SYNTH.contour }, cContourMajor: { value: SYNTH.contourMajor }, cGrid: { value: SYNTH.grid },
+      },
+    ]),
+    vertexShader: /* glsl */ `
+      attribute float realH; // height before the earth-curvature drop (for colours and contours)
+      varying vec3 vWorld;
+      varying float vH;
+      flat varying float vSnow;
+      #include <common>
+      #include <fog_pars_vertex>
+      void main() {
+        vec4 wp = modelMatrix * vec4(position, 1.0);
+        vWorld = wp.xyz;
+        vH = realH;
+        float jitter = fract(sin(dot(wp.xz, vec2(12.9898, 78.233))) * 43758.5453);
+        vSnow = smoothstep(3250.0, 3700.0, realH + jitter * 350.0);
+        vec4 mvPosition = viewMatrix * wp;
+        gl_Position = projectionMatrix * mvPosition;
+        #include <fog_vertex>
+      }`,
+    fragmentShader: /* glsl */ `
+      uniform vec3 lightDir, lightColor;
+      uniform float ambient;
+      uniform vec3 cLow, cMid, cHigh, cSnow, cRim, cContour, cContourMajor, cGrid;
+      varying vec3 vWorld;
+      varying float vH;
+      flat varying float vSnow;
+      #include <common>
+      #include <fog_pars_fragment>
+      float gridLine(float v, float widthPx) {
+        float fw = fwidth(v);
+        float d = abs(fract(v - 0.5) - 0.5) / max(fw, 1e-5);
+        float line = 1.0 - smoothstep(widthPx * 0.5, widthPx * 0.5 + 1.0, d);
+        return line * (1.0 - smoothstep(0.08, 0.25, fw));
+      }
+      void main() {
+        vec3 n = normalize(cross(dFdx(vWorld), dFdy(vWorld)));
+        if (n.y < 0.0) n = -n;
+        float h = vH;
+        vec3 base = mix(cLow, cMid, smoothstep(2000.0, 3600.0, h));
+        base = mix(base, cHigh, smoothstep(3600.0, 5300.0, h));
+        base = mix(base, cSnow, vSnow * 0.85);
+        vec3 L = normalize(lightDir);
+        float key = max(dot(n, L), 0.0);
+        float fill = max(dot(n, normalize(vec3(-L.x, 0.35, -L.z))), 0.0);
+        float rim = pow(1.0 - clamp(n.y, 0.0, 1.0), 2.0);
+        vec3 col = base * (ambient + 1.15 * key * lightColor) + cRim * (fill * 0.22 + rim * 0.16);
+        col += cContour * gridLine(h / 100.0, 1.0) * 0.22 + cContourMajor * gridLine(h / 500.0, 1.4) * 0.45;
+        col += cGrid * max(gridLine(vWorld.x / 1000.0, 1.0), gridLine(vWorld.z / 1000.0, 1.0)) * 0.18;
+        gl_FragColor = vec4(col, 1.0);
+        #include <colorspace_fragment>
+        #include <fog_fragment>
+      }`,
+    fog: true,
+  });
+  Object.assign(mat.uniforms, { lightDir: shared.lightDir, lightColor: shared.lightColor, ambient: shared.ambient });
+  return mat;
+}

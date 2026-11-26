@@ -1,5 +1,23 @@
 # Direction v2: the 3D climb
 
+## Round 9 (2026-11-26): land to the horizon
+
+- **Zoom-out limit 72 km** (was 90 km): the last 20%, where the block looked like a slab in space.
+- **Real land around the block** (`pipeline/build_horizon.py` → `horizon.json` + `horizon.bin`,
+  247 kB; `viewer/src/horizon.ts`): two rings of real heights from Copernicus DEM GLO-90, read at
+  low resolution straight from the public files on AWS (free, also for commercial use):
+  - ring 1: about 120 km square, a vertex every ~400 m; ring 2: about 360 km, every ~2 km;
+  - ring 1's inner edge takes the block's own edge heights, its outer edge follows ring 2, so
+    there are no cracks; the walls of the block still fill the small gaps along the edge;
+  - beyond the block the ground drops with the earth's curvature (about 1.8 km at 150 km out);
+  - digital look: the same palette, facets, contour lines, grid and light (day, night, weather)
+    as the terrain, with snow by height; satellite look: colours by height like the summer photo.
+  - The Main Caucasus Ridge to the south, the Bermamyt plateau and the plains to the north are
+    real. If the files are missing, the block shows alone as before.
+- **Haze closes the view at 150 km** at most, so the ring's far edge (about 180 km out) is never
+  seen.
+- Pipeline: `build_horizon.py` runs after `build_web.py` in `run_all.sh`.
+
 ## Round 8 (2026-11-26): real weather in the sky
 
 - **Source: Open-Meteo** (`viewer/src/weather.ts`). Free, no key, callable straight from the

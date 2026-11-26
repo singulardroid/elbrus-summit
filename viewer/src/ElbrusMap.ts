@@ -11,6 +11,7 @@ import { setTerrainLighting, setTerrainTime, setTerrainTrail, setTerrainStones, 
 import { Sky, skyAt, timeOfDay, type SkyFx, type SkyState, type TimeOfDay } from './celestial';
 import { WeatherFeed, type Weather } from './weather';
 import { Precip } from './precip';
+import { Horizon } from './horizon';
 import { SkyChip, SkyClock } from './skyClock';
 import { ClimbRig } from './rig';
 import { Stones } from './stones';
@@ -47,6 +48,10 @@ type Mode = 'climb' | 'overview';
 
 const BASE_FOV = 45;
 const CLIMB_FOV = 60; // wider, closer: the climb is at person scale
+/** Farthest overview zoom (was 90 km: the last 20% showed the block as a slab in space). */
+const MAX_ORBIT = 72000;
+/** Haze swallows everything by this distance, well inside the horizon ring's edge (~180 km out). */
+const FOG_MAX = 150000;
 const isCoarsePointer = () => window.matchMedia('(pointer: coarse)').matches;
 const deg = THREE.MathUtils.radToDeg;
 const rad = THREE.MathUtils.degToRad;
@@ -113,6 +118,7 @@ export class ElbrusMap {
   private portalsKey = '';
   private fov = BASE_FOV;
   private walls?: THREE.Mesh;
+  private horizon?: Horizon;
 
   private dirty = true;
   private interacting = false; // pointer/touch drag in progress
@@ -168,7 +174,7 @@ export class ElbrusMap {
     this.controls.touches.three = A.TOUCH_SCREEN_PAN;
     this.controls.dollyToCursor = true;
     this.controls.minDistance = 800; // closer than this the 10 m imagery turns to blur
-    this.controls.maxDistance = 90000;
+    this.controls.maxDistance = MAX_ORBIT;
     this.controls.maxPolarAngle = Math.PI / 2 - 0.04; // stop just above the horizon
     this.controls.smoothTime = 0.25;
     this.controls.draggingSmoothTime = 0.08;
@@ -235,6 +241,14 @@ export class ElbrusMap {
     );
     this.walls = walls;
     this.scene.add(walls);
+    // The land around the block, out to the horizon (loads in the background; optional).
+    void Horizon.load(this.dataUrl, m, f).then((h) => {
+      if (!h) return;
+      this.horizon = h;
+      h.setLook(this.look === 'digital');
+      this.scene.add(h.group);
+      this.dirty = true;
+    });
     this.setupLights(m);
 
     this.routes = new Routes(this.routeList);
@@ -458,7 +472,7 @@ export class ElbrusMap {
       if (this.climb) this.labels?.setEmphasis(this.climb.j.stations.map((st) => st.id));
     } else {
       c.minDistance = 800;
-      c.maxDistance = 90000;
+      c.maxDistance = MAX_ORBIT;
       c.maxPolarAngle = Math.PI / 2 - 0.04;
       c.mouseButtons.right = A.SCREEN_PAN;
       c.mouseButtons.middle = A.DOLLY;
@@ -580,6 +594,7 @@ export class ElbrusMap {
     if (!digital) (this.scene.fog as THREE.Fog).color.copy(SKY.horizon);
     if (this.routes) this.routes.group.visible = !digital;
     (this.walls?.material as THREE.MeshLambertMaterial | undefined)?.color.set(digital ? 0x6a4a9e : 0xffffff);
+    this.horizon?.setLook(digital);
     this.container.classList.toggle('look-digital', digital);
     this.climbHud?.setLook(this.look);
     this.dirty = true;
@@ -970,8 +985,8 @@ export class ElbrusMap {
       this.updateWeather(alt, realDt, skyDt);
       const haze = this.fx.haze;
       fog.color.copy(this.tod.fog);
-      fog.near = (climbing ? 1200 : dist * 0.7 + 900) * (1 - 0.9 * haze);
-      fog.far = (climbing ? 26000 : dist * 5 + 24000) * (1 - 0.88 * haze);
+      fog.near = (climbing ? 1200 : Math.min(dist * 0.7 + 900, 50000)) * (1 - 0.9 * haze);
+      fog.far = (climbing ? 26000 : Math.min(dist * 5 + 24000, FOG_MAX)) * (1 - 0.88 * haze);
       this.skyDome.update(this.camera, this.skyState, this.tod, this.fx, time, dt, pr);
       this.precip.update(cam, time, this.rainAmt, this.snowAmt, this.windVec, pr);
       const cover = this.fx.cloud;
@@ -979,8 +994,8 @@ export class ElbrusMap {
       setTerrainLighting(this.tod.lightDir, light, this.tod.ambient + 0.05 * cover + this.fx.flash * 0.9);
       setTerrainTime(time);
     } else {
-      fog.near = dist * 1.1 + 4000;
-      fog.far = dist * 6 + 60000;
+      fog.near = Math.min(dist * 1.1 + 4000, 60000);
+      fog.far = Math.min(dist * 6 + 60000, FOG_MAX);
       this.sky.position.copy(cam);
       this.sky.scale.setScalar(1000);
     }

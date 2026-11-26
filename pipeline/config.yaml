@@ -9,10 +9,11 @@ area:
   size_m: 40000
   crs: "EPSG:32638"            # WGS 84 / UTM zone 38N
 
+# The land around the block out to the horizon: built by build_horizon.py from Copernicus GLO-90
+# (two rings: ~120 km at ~400 m, ~360 km at ~2 km; the layout is set in the script).
 horizon_ring:
-  enabled: false               # phase 6
-  size_m: 200000               # 100 km radius
-  resolution_m: 120
+  enabled: true
+  source: copernicus-glo90
 
 dem:
   source: copernicus-glo30
