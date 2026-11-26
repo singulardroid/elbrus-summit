@@ -1,0 +1,27 @@
+{
+ "source": "Copernicus DEM GLO-90 (\u00a9 DLR e.V. 2010-2014 and \u00a9 Airbus Defence and Space GmbH 2014-2018, provided under COPERNICUS by the European Union and ESA)",
+ "rings": [
+  {
+   "cells": 300,
+   "hole": 100,
+   "x0": -60300.0,
+   "z0": -60120.0,
+   "dx": 402.0,
+   "dz": 400.8,
+   "offset": 0,
+   "min": 310,
+   "max": 5567
+  },
+  {
+   "cells": 180,
+   "hole": 60,
+   "x0": -180900.0,
+   "z0": -180360.0,
+   "dx": 2010.0,
+   "dz": 2004.0,
+   "offset": 181202,
+   "min": 0,
+   "max": 5293
+  }
+ ]
+}
