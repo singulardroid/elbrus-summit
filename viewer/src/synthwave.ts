@@ -29,6 +29,9 @@ export const SUN_DIR = new THREE.Vector3(
   -Math.cos(THREE.MathUtils.degToRad(25)) * Math.cos(THREE.MathUtils.degToRad(2)),
 ).normalize();
 
+/** Radius of the round world (m): the land fades out from 60% of it and ends at it. */
+export const WORLD_RADIUS = 30000;
+
 export const TRAIL_POINTS = 64;
 export const MAX_STONES = 16;
 
@@ -37,6 +40,9 @@ const shared = {
   lightDir: { value: new THREE.Vector3(0.35, 0.55, -0.75).normalize() },
   lightColor: { value: new THREE.Color(0xffffff) },
   ambient: { value: 0.25 },
+  // Round world: beyond this distance from the centre the land is cut; it sinks and fades into the
+  // haze before that, so the edge is never seen.
+  worldRadius: { value: WORLD_RADIUS },
   time: { value: 0 },
   // The trail near the climber, painted into the ground: xy = scene x/z, z = walked (1) or ahead (0), w = distance along.
   trail: { value: Array.from({ length: TRAIL_POINTS }, () => new THREE.Vector4()) },
@@ -108,6 +114,7 @@ export function createTerrainMaterial(map: THREE.Texture): THREE.ShaderMaterial 
     ]),
     vertexShader: /* glsl */ `
       uniform sampler2D map;
+      uniform float worldRadius;
       varying vec3 vWorld;
       varying vec2 vUv;
       flat varying float vSnow; // one value per triangle: crisp, faceted snow patches
@@ -119,6 +126,8 @@ export function createTerrainMaterial(map: THREE.Texture): THREE.ShaderMaterial 
         vec3 sat = textureLod(map, uv, 4.0).rgb;
         vSnow = smoothstep(0.42, 0.5, dot(sat, vec3(0.299, 0.587, 0.114)));
         vec4 wp = modelMatrix * vec4(position, 1.0);
+        // Round world: the land sinks to a low, flat rim toward the edge (no cut ridges against the sky).
+        if (worldRadius > 0.0) wp.y = mix(wp.y, 1300.0, smoothstep(worldRadius * 0.62, worldRadius * 0.95, length(wp.xz)));
         vWorld = wp.xyz;
         vec4 mvPosition = viewMatrix * wp;
         gl_Position = projectionMatrix * mvPosition;
@@ -127,7 +136,7 @@ export function createTerrainMaterial(map: THREE.Texture): THREE.ShaderMaterial 
     fragmentShader: /* glsl */ `
       uniform sampler2D map;
       uniform vec3 lightDir, lightColor;
-      uniform float ambient, time;
+      uniform float ambient, time, worldRadius;
       uniform vec4 trail[${TRAIL_POINTS}];
       uniform int trailN;
       uniform vec2 trailCenter;
@@ -247,8 +256,19 @@ export function createTerrainMaterial(map: THREE.Texture): THREE.ShaderMaterial 
           col += stateColor(arrive.w) * (1.0 - smoothstep(0.0, 0.5, abs(r - at * 9.0))) * (1.0 - at / 1.6) * 0.9;
         }
 
+        // Round world: cut beyond the radius, fade into the haze before it. fogColor is already in
+        // the output colour space, so the fade goes after the conversion (as three's own fog does).
+        float edgeFade = 0.0;
+        if (worldRadius > 0.0) {
+          float rr = length(vWorld.xz);
+          if (rr > worldRadius) discard;
+          edgeFade = smoothstep(worldRadius * 0.6, worldRadius * 0.86, rr);
+        }
         gl_FragColor = vec4(col, 1.0);
         #include <colorspace_fragment>
+        #ifdef USE_FOG
+        gl_FragColor.rgb = mix(gl_FragColor.rgb, fogColor, edgeFade);
+        #endif
         #include <fog_fragment>
       }`,
     fog: true,
@@ -405,6 +425,7 @@ export function createApronMaterial(): THREE.ShaderMaterial {
     ]),
     vertexShader: /* glsl */ `
       attribute float realH; // height before the earth-curvature drop (for colours and contours)
+      uniform float worldRadius;
       varying vec3 vWorld;
       varying float vH;
       flat varying float vSnow;
@@ -412,6 +433,8 @@ export function createApronMaterial(): THREE.ShaderMaterial {
       #include <fog_pars_vertex>
       void main() {
         vec4 wp = modelMatrix * vec4(position, 1.0);
+        // Round world: the land sinks to a low, flat rim toward the edge (no cut ridges against the sky).
+        if (worldRadius > 0.0) wp.y = mix(wp.y, 1300.0, smoothstep(worldRadius * 0.62, worldRadius * 0.95, length(wp.xz)));
         vWorld = wp.xyz;
         vH = realH;
         float jitter = fract(sin(dot(wp.xz, vec2(12.9898, 78.233))) * 43758.5453);
@@ -422,7 +445,7 @@ export function createApronMaterial(): THREE.ShaderMaterial {
       }`,
     fragmentShader: /* glsl */ `
       uniform vec3 lightDir, lightColor;
-      uniform float ambient;
+      uniform float ambient, worldRadius;
       uniform vec3 cLow, cMid, cHigh, cSnow, cRim, cContour, cContourMajor, cGrid;
       varying vec3 vWorld;
       varying float vH;
@@ -449,12 +472,48 @@ export function createApronMaterial(): THREE.ShaderMaterial {
         vec3 col = base * (ambient + 1.15 * key * lightColor) + cRim * (fill * 0.22 + rim * 0.16);
         col += cContour * gridLine(h / 100.0, 1.0) * 0.22 + cContourMajor * gridLine(h / 500.0, 1.4) * 0.45;
         col += cGrid * max(gridLine(vWorld.x / 1000.0, 1.0), gridLine(vWorld.z / 1000.0, 1.0)) * 0.18;
+        // Round world: cut beyond the radius, fade into the haze before it. fogColor is already in
+        // the output colour space, so the fade goes after the conversion (as three's own fog does).
+        float edgeFade = 0.0;
+        if (worldRadius > 0.0) {
+          float rr = length(vWorld.xz);
+          if (rr > worldRadius) discard;
+          edgeFade = smoothstep(worldRadius * 0.6, worldRadius * 0.86, rr);
+        }
         gl_FragColor = vec4(col, 1.0);
         #include <colorspace_fragment>
+        #ifdef USE_FOG
+        gl_FragColor.rgb = mix(gl_FragColor.rgb, fogColor, edgeFade);
+        #endif
         #include <fog_fragment>
       }`,
     fog: true,
   });
-  Object.assign(mat.uniforms, { lightDir: shared.lightDir, lightColor: shared.lightColor, ambient: shared.ambient });
+  Object.assign(mat.uniforms, { lightDir: shared.lightDir, lightColor: shared.lightColor, ambient: shared.ambient, worldRadius: shared.worldRadius });
+  return mat;
+}
+
+/**
+ * The round world for a built-in material (the satellite look): the same sinking rim, fade into
+ * the haze and cut as the digital shaders, patched into three's Lambert shader.
+ */
+export function roundWorld<T extends THREE.Material>(mat: T): T {
+  mat.onBeforeCompile = (shader) => {
+    shader.uniforms.worldRadius = shared.worldRadius;
+    shader.vertexShader = shader.vertexShader
+      .replace('void main() {', 'uniform float worldRadius;\nvarying float vRwR;\nvoid main() {')
+      .replace('#include <project_vertex>', `
+        vec4 rwWorld = modelMatrix * vec4(transformed, 1.0);
+        vRwR = length(rwWorld.xz);
+        rwWorld.y = mix(rwWorld.y, 1300.0, smoothstep(worldRadius * 0.62, worldRadius * 0.95, vRwR));
+        vec4 mvPosition = viewMatrix * rwWorld;
+        gl_Position = projectionMatrix * mvPosition;`);
+    shader.fragmentShader = shader.fragmentShader
+      .replace('void main() {', 'uniform float worldRadius;\nvarying float vRwR;\nvoid main() {\n  if (vRwR > worldRadius) discard;')
+      .replace('#include <fog_fragment>', `#include <fog_fragment>
+        #ifdef USE_FOG
+        gl_FragColor.rgb = mix(gl_FragColor.rgb, fogColor, smoothstep(worldRadius * 0.6, worldRadius * 0.86, vRwR));
+        #endif`);
+  };
   return mat;
 }

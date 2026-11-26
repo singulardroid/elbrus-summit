@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import type { Manifest, TileInfo } from './data';
-import { createTerrainMaterial } from './synthwave';
+import { createTerrainMaterial, roundWorld } from './synthwave';
 
 export type Look = 'digital' | 'satellite';
 
@@ -342,7 +342,7 @@ export class TileSet {
       tex.generateMipmaps = true;
       tex.needsUpdate = true;
 
-      const mat = new THREE.MeshLambertMaterial({ map: tex });
+      const mat = roundWorld(new THREE.MeshLambertMaterial({ map: tex }));
       if (this.opts.debugTint) mat.color.setHSL([0, 0.15, 0.33, 0.6][t.info.level % 4], 0.9, 0.7);
       t.satellite = mat;
       mesh.material = this.materialFor(t);

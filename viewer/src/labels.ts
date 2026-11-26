@@ -1,3 +1,4 @@
+import { WORLD_RADIUS } from './synthwave';
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import type { CollisionGrid, Poi } from './data';
@@ -84,14 +85,16 @@ export class Labels {
       const behind = !!collision && (inRange || selected) && isHiddenByTerrain(poi, cam, collision);
       // The selected place stays visible (dimmed when behind terrain) so it can always be found.
       const near = !!this.hideNear && this.tmp.set(...poi.position).distanceTo(this.hideNear.p) < this.hideNear.r;
-      obj.visible = selected || (inRange && !behind && !near);
+      // Places out where the round world fades into the haze stay unlabelled.
+      const faded = Math.hypot(poi.position[0], poi.position[2]) > WORLD_RADIUS * 0.62;
+      obj.visible = selected || (inRange && !behind && !near && !faded);
       obj.element.classList.toggle('is-behind', selected && behind);
     }
   }
 
   /** After rendering: hide labels overlapping a more important one. */
-  declutter(): void {
-    const placed: DOMRect[] = [];
+  declutter(reserved: DOMRect[] = []): void {
+    const placed: DOMRect[] = [...reserved]; // e.g. the climb markers: they always win
     // Priority: the selected place, then emphasised places (route stops), then the default rank.
     const prio = (l: Label) => (l.poi.id === this.selectedId ? 0 : this.emphasis.has(l.poi.id) ? 1 : 2);
     const ordered = [...this.items].sort((a, b) => prio(a) - prio(b));

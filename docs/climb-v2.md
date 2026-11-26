@@ -1,5 +1,55 @@
 # Direction v2: the 3D climb
 
+## Round 11 (2026-11-26): the dome camera and an opening view per language
+
+- **A dome over the mountain** (`domeReach` in `ElbrusMap.ts`): the overview camera stays under an
+  ellipsoid 20 km across at sea level and 12 km high over the centre. Going up brings you closer
+  to the mountain; you can never leave it. Enforced by shortening the zoom distance only
+  (`dollyTo`), which leaves a rotation in progress alone. Replaces round 10's "below 5000 m"
+  rule and its after-rest corrections.
+- **Down to the ground:** tilt goes below horizontal (to 100°); the ground is the only floor
+  (clearance 25 m, or 0.4% of the distance). You can stand in a valley and look up.
+- **The pivot is low:** 3400 m, inside the mountain, no longer pulled onto the surface. Panning
+  moves it across the map at that height (truck with vertical drag forward), and the wheel zooms
+  toward it (not toward the cursor).
+- **Opening view per language** (`computeHome`): the route seen side-on, framed to fit the
+  screen, from a little above it (72°): Azau on the left and the summit on the right in Russian,
+  English and Chinese; mirrored in Arabic. Switching language while the guide's mountain view is
+  up turns the view around.
+  - Arabic uses a view picked by hand: the summit upper left, the route coming down to the lower
+    right, 62° tilt, turned 48° further round, 10.1 km away in a 1015 x 859 window (scaled to
+    other screens the same way).
+- **Start and "You are here" markers** (`climbMarkers.ts`) in the whole-mountain view: station 1
+  and the station you last stood at; click either to go back into the climb there. Drawn above
+  the place labels, which step aside where they overlap. At station 1 they merge into one.
+- **Camera flights are no longer cut short:** the dome is checked on where the camera is heading,
+  and the ground correction lets a flight pass when it is headed above the ground (the way from
+  the climb to the home view dips through the slope now that the pivot sits inside the mountain).
+
+## Round 10 (2026-11-26): a compact round world, a lower camera
+
+Round 9 was too much: 72 km of zoom and land out to 180 km. Drafts at 15, 20 and 30 km radius
+were compared; 30 km was chosen.
+- **Round world, 30 km radius** (`WORLD_RADIUS` in `synthwave.ts`), in both looks: from 60% of
+  the radius the land sinks to a low flat rim and fades into the haze colour, and it ends at the
+  radius. Below the horizon the sky is that same haze colour, so the edge is never seen.
+  - Only the inner ring of the surrounding land is drawn, cropped to the circle: about 16,000
+    triangles instead of 218,000. The outer ring is no longer used.
+  - Place labels beyond 62% of the radius stay hidden (they would float over the haze).
+  - Satellite look: the same rim, fade and cut, patched into three's Lambert shader (`roundWorld`).
+  - Fix: the fade happens after the colour-space conversion; three's `fogColor` is already in
+    the output colour space, so fading before it gave a light ring at the edge.
+- **Zoom-out at most 20 km** from the point you look at; that point stays within 10 km of the
+  centre, and the camera within 24 km.
+- **A lower camera:** the farther out, the flatter the view. Close up you may look down steeply;
+  from 6 to 12 km out the camera is also held below 5000 m, so from afar you look up at the summit.
+  - Only the allowed tilt range changes each frame (camera-controls applies it when you rotate).
+    A first version forced the angle every frame; it fought the ground clearance (which lifts the
+    camera with an instant move that cancels any zoom or tilt in progress) and froze both.
+  - When the camera comes to rest out of range (zoomed out from a view from above, or too far
+    from the centre) it glides back once (`settleCamera`), unless the ground just had to lift it.
+- **Wheel over a place label zooms** (labels sit above the canvas and used to swallow it).
+
 ## Round 9 (2026-11-26): land to the horizon
 
 - **Zoom-out limit 72 km** (was 90 km): the last 20%, where the block looked like a slab in space.

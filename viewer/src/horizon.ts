@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { fetchBinary, fetchJson, type Frame, type Manifest } from './data';
-import { createApronMaterial } from './synthwave';
+import { createApronMaterial, roundWorld, WORLD_RADIUS } from './synthwave';
 
 /**
  * The land around the relief block, out toward the horizon (pipeline/build_horizon.py): two rings
@@ -21,7 +21,7 @@ const EARTH_R = 6371000;
 export class Horizon {
   readonly group = new THREE.Group();
   private readonly digital = createApronMaterial();
-  private readonly satellite = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+  private readonly satellite = roundWorld(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
   private meshes: THREE.Mesh[] = [];
 
   static async load(base: string, m: Manifest, f: Frame): Promise<Horizon | null> {
@@ -47,6 +47,8 @@ export class Horizon {
     this.stitchToBlock(rings[0], heights[0], m, f);
 
     rings.forEach((r, k) => {
+      // Only rings that reach inside the round world (the outer one starts beyond it).
+      if ((r.hole / 2) * Math.min(r.dx, r.dz) >= WORLD_RADIUS) return;
       const mesh = new THREE.Mesh(this.geometry(r, heights[k], hw, hd), this.digital);
       mesh.frustumCulled = false;
       mesh.renderOrder = -1;
@@ -123,6 +125,9 @@ export class Horizon {
     for (let row = 0; row < r.cells; row++) {
       for (let q = 0; q < r.cells; q++) {
         if (row >= i0 && row < i1 && q >= i0 && q < i1) continue; // the hole
+        // Cells wholly beyond the round world's edge are never drawn.
+        const cx = r.x0 + (q + 0.5) * r.dx, cz = r.z0 + (row + 0.5) * r.dz;
+        if (Math.hypot(cx, cz) > WORLD_RADIUS + Math.hypot(r.dx, r.dz)) continue;
         const a = row * na + q, b = a + 1, d = a + na, e = d + 1;
         if ((row + q) % 2) idx.push(a, d, b, b, d, e);
         else idx.push(a, d, e, a, e, b);

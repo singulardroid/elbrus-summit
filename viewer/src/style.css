@@ -1041,3 +1041,46 @@ html[lang='zh'] .elbrus-map { --ch-mono: 'JetBrains Mono', 'PingFang SC', 'Micro
 }
 .sky-clock .sky-wx { font-style: normal; color: var(--ch-text); font-variant-numeric: tabular-nums; }
 .eu-attrib-text a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+
+/* Whole-mountain view: "Start" (station 1) and "You are here" markers; click to go back to the climb. */
+.cm {
+  all: unset;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: auto;
+  cursor: pointer;
+  font-family: var(--ch-body, var(--eu-font));
+  z-index: 100000 !important; /* above the place labels (CSS2DRenderer sets z-index inline) */
+}
+.cm-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 4px 10px 5px;
+  border-radius: 999px;
+  border: 1.5px solid currentColor;
+  background: rgba(11, 22, 38, 0.86);
+  line-height: 1.15;
+  white-space: nowrap;
+  backdrop-filter: blur(4px);
+  transition: transform 0.12s ease, background 0.12s ease;
+}
+.cm-name { font-size: 12px; font-weight: 700; color: #fff; }
+.cm-n { font-family: var(--ch-mono, monospace); font-size: 10px; opacity: 0.9; }
+.cm-stem { width: 2px; height: 22px; background: currentColor; }
+.cm::after {
+  content: '';
+  width: 11px;
+  height: 11px;
+  margin-top: -5px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 0 3px rgba(11, 22, 38, 0.8), 0 0 14px currentColor;
+}
+.cm--start { color: #ffb08a; }
+.cm--here { color: #ff4fd8; }
+.cm--here::after { animation: cm-pulse 1.8s ease-in-out infinite; }
+@keyframes cm-pulse { 50% { box-shadow: 0 0 0 3px rgba(11, 22, 38, 0.8), 0 0 26px 6px currentColor; } }
+.cm:hover .cm-box, .cm:focus-visible .cm-box { transform: translateY(-2px); background: rgba(11, 22, 38, 0.97); }
+@media (prefers-reduced-motion: reduce) { .cm--here::after { animation: none; } }

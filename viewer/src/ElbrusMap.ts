@@ -12,6 +12,7 @@ import { Sky, skyAt, timeOfDay, type SkyFx, type SkyState, type TimeOfDay } from
 import { WeatherFeed, type Weather } from './weather';
 import { Precip } from './precip';
 import { Horizon } from './horizon';
+import { ClimbMarkers } from './climbMarkers';
 import { SkyChip, SkyClock } from './skyClock';
 import { ClimbRig } from './rig';
 import { Stones } from './stones';
@@ -20,7 +21,7 @@ import { Labels } from './labels';
 import { Routes } from './routes';
 import { Panel } from './panel';
 import { createSky, SKY } from './sky';
-import { metres } from './i18n';
+import { langInfo, metres, onLang } from './i18n';
 import { Tour, tourSeen } from './tour';
 import { createHud, type Hud } from './hud';
 import { formatHash, parseHash, writeHash, type UrlState } from './urlState';
@@ -48,13 +49,25 @@ type Mode = 'climb' | 'overview';
 
 const BASE_FOV = 45;
 const CLIMB_FOV = 60; // wider, closer: the climb is at person scale
-/** Farthest overview zoom (was 90 km: the last 20% showed the block as a slab in space). */
-const MAX_ORBIT = 72000;
+const rad = THREE.MathUtils.degToRad;
+/**
+ * The overview camera lives under a dome over the mountain: 20 km across at ground level, 12 km
+ * high over the centre. Going up brings you closer; you can never leave it. (The world itself is
+ * WORLD_RADIUS round, so its faded edge always stays far off.)
+ */
+const DOME_RADIUS = 20000;
+const DOME_TOP = 12000;
+const MAX_ORBIT = DOME_RADIUS;
+/** The point the overview turns around sits this high: low, inside the mountain. */
+const PIVOT_Y = 3400;
+/** The orbit target stays within this distance of the centre. */
+const TARGET_RADIUS = 10000;
+/** The deepest tilt: below horizontal, so you can stand low and look up; the ground is the floor. */
+const MAX_TILT = rad(100);
 /** Haze swallows everything by this distance, well inside the horizon ring's edge (~180 km out). */
 const FOG_MAX = 150000;
 const isCoarsePointer = () => window.matchMedia('(pointer: coarse)').matches;
 const deg = THREE.MathUtils.radToDeg;
-const rad = THREE.MathUtils.degToRad;
 
 export class ElbrusMap {
   private readonly renderer: THREE.WebGLRenderer;
@@ -81,6 +94,7 @@ export class ElbrusMap {
   private selected?: Poi;
   private selectedRoute?: Route;
   private home?: { pos: THREE.Vector3; target: THREE.Vector3 };
+  private homeDir: 'ltr' | 'rtl' = 'ltr';
 
   // The guided climb (250 story doors) and the synthwave look.
   private mode: Mode = 'overview';
@@ -119,6 +133,7 @@ export class ElbrusMap {
   private fov = BASE_FOV;
   private walls?: THREE.Mesh;
   private horizon?: Horizon;
+  private markers?: ClimbMarkers;
 
   private dirty = true;
   private interacting = false; // pointer/touch drag in progress
@@ -130,6 +145,8 @@ export class ElbrusMap {
   private readonly raycaster = new THREE.Raycaster();
   private readonly tmpA = new THREE.Vector3();
   private readonly tmpB = new THREE.Vector3();
+  private readonly tmpC = new THREE.Vector3();
+  private readonly tmpD = new THREE.Vector3();
 
   constructor(private readonly container: HTMLElement, opts: ElbrusMapOptions = {}) {
     this.dataUrl = (opts.dataUrl ?? './elbrus/').replace(/\/?$/, '/');
@@ -153,6 +170,13 @@ export class ElbrusMap {
     // absolutely placed element would start from the right edge instead.
     this.labelRenderer.domElement.dir = 'ltr';
     container.appendChild(this.labelRenderer.domElement);
+    // The wheel over a place label zooms the map too (labels sit above the canvas and would
+    // otherwise swallow it, so scrolling over the summit's label did nothing).
+    this.labelRenderer.domElement.addEventListener('wheel', (e) => {
+      if (e.target === this.renderer.domElement) return;
+      e.preventDefault();
+      this.renderer.domElement.dispatchEvent(new WheelEvent('wheel', e));
+    }, { passive: false });
 
     this.scene.fog = new THREE.Fog(SKY.horizon, 30000, 200000);
     this.scene.add(this.sky);
@@ -164,18 +188,19 @@ export class ElbrusMap {
     this.controls = new CameraControls(this.camera, this.renderer.domElement);
     const A = CameraControls.ACTION;
     this.controls.mouseButtons.left = A.ROTATE;
-    this.controls.mouseButtons.right = A.SCREEN_PAN; // pan along the ground, map-style
+    this.controls.mouseButtons.right = A.TRUCK; // pan across the map; the pivot keeps its height
     this.controls.mouseButtons.middle = A.DOLLY;
     this.controls.mouseButtons.wheel = A.DOLLY;
     this.controls.touches.one = A.TOUCH_ROTATE;
     // Pinch to zoom + drag to pan along the ground. Supported at runtime; missing from the
     // library's multiTouchAction type union.
-    this.controls.touches.two = A.TOUCH_DOLLY_SCREEN_PAN as typeof A.TOUCH_DOLLY_TRUCK;
-    this.controls.touches.three = A.TOUCH_SCREEN_PAN;
-    this.controls.dollyToCursor = true;
+    this.controls.touches.two = A.TOUCH_DOLLY_TRUCK;
+    this.controls.touches.three = A.TOUCH_TRUCK;
+    this.controls.verticalDragToForward = true; // panning moves along the ground, not up and down
+    this.controls.dollyToCursor = false; // zoom toward the mountain (the pivot)
     this.controls.minDistance = 800; // closer than this the 10 m imagery turns to blur
     this.controls.maxDistance = MAX_ORBIT;
-    this.controls.maxPolarAngle = Math.PI / 2 - 0.04; // stop just above the horizon
+    this.controls.maxPolarAngle = MAX_TILT;
     this.controls.smoothTime = 0.25;
     this.controls.draggingSmoothTime = 0.08;
     this.controls.addEventListener('update', () => (this.dirty = true));
@@ -241,11 +266,13 @@ export class ElbrusMap {
     );
     this.walls = walls;
     this.scene.add(walls);
+
     // The land around the block, out to the horizon (loads in the background; optional).
     void Horizon.load(this.dataUrl, m, f).then((h) => {
       if (!h) return;
       this.horizon = h;
       h.setLook(this.look === 'digital');
+      walls.visible = false; // the land around covers the block's edges now
       this.scene.add(h.group);
       this.dirty = true;
     });
@@ -276,6 +303,9 @@ export class ElbrusMap {
         this.opened = THREE.MathUtils.clamp(stories.opened, 0, m.journey.doors.length);
       }
       this.climb = new Climb(m.journey);
+      // Whole-mountain view: where the climb starts and where you are; click to go back.
+      this.markers = new ClimbMarkers(m.journey, (n) => this.enterClimb(n));
+      this.scene.add(this.markers.group);
       this.doors = new Doors(m.journey, this.opened, (n) => this.goToDoor(n));
       this.doors.setResolution(this.size.w, this.size.h);
       this.scene.add(this.doors.group);
@@ -315,18 +345,22 @@ export class ElbrusMap {
     }
     this.applyLook();
 
-    // Keep the orbit target over the model.
+    // Keep the orbit target near the mountain, well inside the round world.
+    const tr = Math.min(TARGET_RADIUS, f.halfWidth, f.halfDepth);
     this.controls.setBoundary(new THREE.Box3(
-      new THREE.Vector3(-f.halfWidth, m.height.min - 500, -f.halfDepth),
-      new THREE.Vector3(f.halfWidth, m.height.max + 500, f.halfDepth),
+      new THREE.Vector3(-tr, m.height.min - 500, -tr),
+      new THREE.Vector3(tr, m.height.max + 500, tr),
     ));
     this.controls.boundaryFriction = 0.2;
 
-    // Home view: Elbrus from the south-southwest, the side most visitors approach from.
-    const summit = m.pois.find((p) => p.id === 'west-summit')?.position ?? [0, m.height.max, 0];
-    const target = new THREE.Vector3(summit[0] + 800, summit[1] - 800, summit[2] + 1500);
-    const pos = orbitPosition(target, 17000, rad(-18), rad(72));
-    this.home = { pos, target };
+    this.computeHome(m);
+    const { pos, target } = this.home!;
+    // In another language the route reads the other way (Arabic: right to left).
+    onLang(() => {
+      const dir = this.homeDir;
+      this.computeHome(m);
+      if (dir !== this.homeDir && this.mode === 'overview' && this.idleSpin) this.showMountain();
+    });
 
     const fromUrl = this.urlState ? parseHash(location.hash) : { kind: 'none' as const };
     // First visit (no shared link to follow): the mountain view and the guide. `?tour` forces it.
@@ -348,6 +382,42 @@ export class ElbrusMap {
     this.hud.setProgress(1);
     this.hud.hideLoading();
     if (wantTour) this.tour!.start();
+  }
+
+  /**
+   * The opening view of the whole mountain: the route seen side-on, start to summit reading in the
+   * language's direction (Azau on the left, the summit on the right; mirrored for Arabic), framed
+   * to fit the screen, from a little above the summit, turning around a pivot low in the mountain.
+   */
+  private computeHome(m: Manifest): void {
+    this.homeDir = langInfo().dir === 'rtl' ? 'rtl' : 'ltr';
+    const summitPoi = m.pois.find((p) => p.id === 'west-summit')?.position ?? [0, m.height.max, 0];
+    const a = this.climb ? this.climb.pointAt(0) : new THREE.Vector3(summitPoi[0] + 3000, 2350, summitPoi[2] + 9000);
+    const b = this.climb ? this.climb.pointAt(this.climb.j.lengthM) : new THREE.Vector3(...summitPoi);
+    const target = new THREE.Vector3((a.x + b.x) / 2, PIVOT_Y, (a.z + b.z) / 2);
+    // Screen right should point along the route (rtl: against it). Camera azimuth from the target,
+    // measured from +Z (south) toward +X (east), as in orbitPosition().
+    const r = new THREE.Vector2(b.x - a.x, b.z - a.z);
+    const len = r.length();
+    r.normalize();
+    if (this.homeDir === 'rtl') r.negate();
+    const aspect = Math.max(this.container.clientWidth, 1) / Math.max(this.container.clientHeight, 1);
+    const halfH = Math.atan(Math.tan(rad(BASE_FOV / 2)) * aspect);
+    let azimuth = Math.atan2(-r.y, r.x);
+    let polar = rad(72); // high enough to see Azau over the ridges in front of it
+    // Fit the route's length across the screen with some margin.
+    let want = ((len / 2) * 1.5) / Math.tan(halfH) + 2500;
+    if (this.homeDir === 'rtl') {
+      // Arabic: the view chosen by hand (2026-11-26): summit upper left, the route coming down to
+      // Azau at the lower right, seen from higher and turned 48° further round; 10.1 km away in a
+      // 1015 x 859 window, scaled to fit other screens the same way.
+      azimuth += rad(47.7);
+      polar = rad(62);
+      want = (10100 * Math.tan(Math.atan(Math.tan(rad(BASE_FOV / 2)) * (1015 / 859)))) / Math.tan(halfH);
+    }
+    const dir = orbitPosition(new THREE.Vector3(), 1, azimuth, polar);
+    const dist = THREE.MathUtils.clamp(want, 6000, domeReach(target, dir) * 0.97);
+    this.home = { pos: orbitPosition(target, dist, azimuth, polar), target };
   }
 
   /** The whole mountain from the home view, turning slowly (the guide's backdrop). */
@@ -473,13 +543,14 @@ export class ElbrusMap {
     } else {
       c.minDistance = 800;
       c.maxDistance = MAX_ORBIT;
-      c.maxPolarAngle = Math.PI / 2 - 0.04;
-      c.mouseButtons.right = A.SCREEN_PAN;
+      c.minPolarAngle = 0;
+      c.maxPolarAngle = MAX_TILT;
+      c.mouseButtons.right = A.TRUCK;
       c.mouseButtons.middle = A.DOLLY;
       c.mouseButtons.wheel = A.DOLLY;
-      c.touches.two = A.TOUCH_DOLLY_SCREEN_PAN as typeof A.TOUCH_DOLLY_TRUCK;
-      c.touches.three = A.TOUCH_SCREEN_PAN;
-      c.dollyToCursor = true;
+      c.touches.two = A.TOUCH_DOLLY_TRUCK;
+      c.touches.three = A.TOUCH_TRUCK;
+      c.dollyToCursor = false;
       this.labels?.setEmphasis();
       this.labels?.setHideNear(undefined);
     }
@@ -953,20 +1024,33 @@ export class ElbrusMap {
       const target = this.controls.getTarget(this.tmpA);
       dist = cam.distanceTo(target);
       if (this.collision) {
-        // Keep the orbit target resting on the ground while panning over valleys and ridges.
-        // Only once settled: adjusting mid-transition would cut camera flights short.
-        const tg = this.collision.heightAt(target.x, target.z);
-        const settled = this.controls.getTarget(this.tmpB, true).distanceTo(target) < 1;
-        if (settled && Math.abs(target.y - tg) > 2 && !this.interacting) {
-          void this.controls.moveTo(target.x, target.y + (tg - target.y) * 0.2, target.z, false);
+        // The dome: in this direction the camera may be at most this far from the target. Going
+        // up shortens it, so you come closer to the mountain. Only the distance is touched
+        // (dollyTo leaves a rotation in progress alone), so nothing freezes mid-gesture.
+        // Checked on where the camera is heading (the end of a flight or gesture), not on the
+        // positions it passes through: a flight to the home view must not be cut short.
+        const endT = this.controls.getTarget(this.tmpC, true);
+        const endP = this.controls.getPosition(this.tmpD, true);
+        const endDist = endP.distanceTo(endT);
+        const toCam = endP.sub(endT).divideScalar(Math.max(endDist, 1));
+        const reach = Math.max(this.controls.minDistance, domeReach(endT, toCam));
+        this.controls.maxDistance = reach;
+        if (endDist > reach + 1) {
+          void this.controls.dollyTo(reach, false);
+          this.controls.update(0);
           this.dirty = true;
         }
         // Never let the camera dip below the terrain. During a camera flight only step in when it
         // would actually go underground: a correction cancels the flight (setPosition is instant).
         const ground = this.collision.heightAt(cam.x, cam.z);
         const flying = this.controls.getPosition(this.tmpB, true).distanceTo(cam) > 1;
-        const clearance = flying ? 3 : Math.max(60, dist * 0.03);
-        if (cam.y < ground + clearance) {
+        // While the camera is headed somewhere above the ground (a flight to the home view, whose
+        // path may dip through the slope since the pivot sits inside the mountain), let it pass:
+        // a correction would cancel the flight. Dragging into the ground is still stopped.
+        const clearance = Math.max(25, dist * 0.004); // low enough to stand in a valley
+        const end = this.controls.getPosition(this.tmpD, true);
+        const passing = flying && end.y > this.collision.heightAt(end.x, end.z) + clearance;
+        if (!passing && cam.y < ground + clearance) {
           void this.controls.setPosition(cam.x, ground + clearance, cam.z, false);
           this.controls.update(0);
         }
@@ -1031,10 +1115,11 @@ export class ElbrusMap {
       if (this.debug) this.hud.setDebug(this.tiles.stats());
     }
     this.labels?.update(this.camera, this.collision);
+    if (this.climb) this.markers?.update(this.mode === 'overview', this.climb.door);
     this.hud.setHeading(climbing ? -this.rig!.yaw : this.controls.azimuthAngle);
     this.renderer.render(this.scene, this.camera);
     this.labelRenderer.render(this.scene, this.camera);
-    this.labels?.declutter();
+    this.labels?.declutter(this.markers?.boxes());
     if (!climbing) this.updateHover();
   }
 
@@ -1057,6 +1142,20 @@ export class ElbrusMap {
 }
 
 /** Camera position orbiting `target` (azimuth: camera-controls convention, 0 = camera south of target). */
+/**
+ * How far from target t the camera may go in unit direction v before leaving the dome (an
+ * ellipsoid over the centre: DOME_RADIUS across at sea level, DOME_TOP high).
+ */
+function domeReach(t: THREE.Vector3, v: THREE.Vector3): number {
+  const qx = t.x / DOME_RADIUS, qy = t.y / DOME_TOP, qz = t.z / DOME_RADIUS;
+  const wx = v.x / DOME_RADIUS, wy = v.y / DOME_TOP, wz = v.z / DOME_RADIUS;
+  const a = wx * wx + wy * wy + wz * wz;
+  const b = qx * wx + qy * wy + qz * wz;
+  const c = qx * qx + qy * qy + qz * qz - 1;
+  const disc = b * b - a * c;
+  return c >= 0 || disc <= 0 ? 0 : (-b + Math.sqrt(disc)) / a;
+}
+
 function orbitPosition(target: THREE.Vector3, dist: number, azimuth: number, polar: number): THREE.Vector3 {
   return new THREE.Vector3(
     target.x + dist * Math.sin(polar) * Math.sin(azimuth),

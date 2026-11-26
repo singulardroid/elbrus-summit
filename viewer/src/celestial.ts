@@ -325,8 +325,8 @@ export class Sky {
           // Haze and fog: the horizon first, the whole sky when it is thick.
           c = mix(c, fogColor, haze * (1.0 - smoothstep(0.0, 0.5, y)) + haze * haze * 0.6 * smoothstep(0.0, 0.5, y));
 
-          // Below eye level: fade into the fog so far ridges melt into the haze.
-          if (y < 0.0) c = mix(mix(hor, fogColor, 0.4), fogColor, smoothstep(0.0, -0.3, y));
+          // Below eye level: the haze colour (the round world's faded edge ends in it seamlessly).
+          if (y < 0.0) c = mix(mix(hor, fogColor, 0.6), fogColor, smoothstep(0.0, -0.06, y));
           gl_FragColor = vec4(c, 1.0);
           #include <colorspace_fragment>
         }`,
