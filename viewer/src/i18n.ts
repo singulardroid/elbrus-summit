@@ -136,8 +136,8 @@ const STR: Record<Lang, Dict> = {
   },
 
   en: {
-    brand: 'Summit of Russia',
-    'doc.title': 'Summit of Russia · Elbrus 3D',
+    brand: "Russia's Peak",
+    'doc.title': "Russia's Peak · Elbrus 3D",
     'unit.m': '{v} m',
     'unit.km': '{v} km',
     num: 'No. {n}',
@@ -199,7 +199,7 @@ const STR: Record<Lang, Dict> = {
     storyN: 'story No. {n}',
     nextStation: 'Next station: No. {n}',
     storyCell: 'Story {n}',
-    shareTitle: 'Summit of Russia · story No. {n}',
+    shareTitle: "Russia's Peak · story No. {n}",
     'ph.title': '[STORY TITLE]',
     'ph.teaser': '[One or two lines teasing the story: who, when, what happened on Elbrus.]',
     'ph.date': '[DATE]',
