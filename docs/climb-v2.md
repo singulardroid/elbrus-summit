@@ -1,5 +1,64 @@
 # Direction v2: the 3D climb
 
+## Round 8 (2026-11-26): real weather in the sky
+
+- **Source: Open-Meteo** (`viewer/src/weather.ts`). Free, no key, callable straight from the
+  browser. One call gets 72 hours (yesterday, today, tomorrow) of hourly weather for two points,
+  Azau (2350 m) and the summit (5642 m): temperature, precipitation, snowfall, weather code,
+  cloud cover, visibility, wind speed, gusts and direction.
+  - **Free only for non-commercial sites.** Their terms count sites with ads or subscriptions as
+    commercial; those need the paid plan (or a self-hosted Open-Meteo: change `WEATHER_URL`).
+  - **Credit required (CC BY 4.0):** "Weather data by Open-Meteo.com" is in the data panel.
+  - Free limits: 10,000 calls a day, counted per IP; each visitor calls at most once an hour.
+  - The visitor's IP address reaches Open-Meteo (only Elbrus coordinates are sent).
+- **Time and place:** the sky clock's time picks the hour; your altitude (the climber, or the
+  point the overview looks at) blends Azau and the summit, so it can be clear at Azau and snowing
+  on top. When the sped-up sky runs past the data, it loops back to the start. Changes ease in
+  over a few seconds.
+- **If the call fails** (offline, blocked, timeout, odd answer): the last good answer from this
+  browser if it is under two days old, else no weather at all: the clear sky as before. Nothing
+  throws, nothing is shown as an error.
+- **Effects** (digital look):
+  - clouds: a cloud layer drifting with the real wind direction and speed (faster when the sky
+    runs fast), bright tops and violet bellies, pink at sunset, moonlit at night; they hide the
+    stars, the moon and the Milky Way behind them; overcast greys the sky and dims the sunlight;
+  - rain (slanted streaks) or snow (swaying flakes), as much as the forecast says; snow when it
+    is below about 1 °C at your altitude; wind-blown snow in strong cold wind;
+  - fog and haze from visibility (and the fog weather codes): the horizon first, then everything;
+  - thunderstorms: a darker sky and lightning flashes that light up the clouds and the slopes.
+- **Sky clock** shows the weather icon and the temperature at your altitude; its tooltip gives the
+  conditions, wind and gusts, with the source.
+- **URL:** `?weather=clear|cloudy|rain|snow|fog|haze|wind|storm` shows that weather instead of the
+  real one (for demos and checks); `?weather=off` never calls the service.
+- Also: the stones no longer flood the console with a three.js warning.
+
+## Round 7 (2026-11-26): a sky on the visitor's clock
+
+- **Local time.** The digital sky starts at the visitor's own local time: their morning is morning
+  on Elbrus, their night is night (the instant is picked so Elbrus clocks, UTC+3, read the same as
+  the visitor's). It no longer follows the climb (the old "night at Azau, dawn on the summit").
+- **Hold, then speed up** (`viewer/src/skyClock.ts`). Real time for the first 2½ minutes, so the
+  sky is what it should be right now; then over 45 s it speeds up to ×240 (one sky hour every
+  15 s, a whole day in six minutes). Driven by wall-clock time, so slow frames don't slow it.
+- **A real sky** (`viewer/src/celestial.ts`), computed for 43.35° N, 42.44° E:
+  - sun and moon from low-precision ephemerides (about a degree; sunset on 26 Nov comes out at
+    16:35, the real one is about 16:40);
+  - the moon is lit by the sun, so its phase is the real one, with faint earthshine;
+  - stars turn with local sidereal time; about 80 of the brightest are placed from a catalogue
+    (Big Dipper, Cassiopeia, Orion, the Summer Triangle, the Pleiades…), the faint ones crowd the
+    Milky Way;
+  - the Milky Way lies along the real galactic plane, brighter and warmer toward the centre in
+    Sagittarius, with a dust lane; Andromeda and the Orion Nebula as small glows;
+  - a full day: night, twilight (pink horizon on the sun's side), and a violet synthwave day.
+    The terrain light follows the sun by day and the moon at night (as bright as its phase).
+- **Sky clock** (top right, digital look only): the sky time with a sun or moon icon, "now" while
+  it runs in real time, "▸▸ ×240" when fast. Tap to speed up at once, tap again to go back to now.
+- **URL:** `?time=21:30` starts the sky at that local time, `?speed=600` runs it that fast from
+  the start (handy for checking a sunset).
+- The guide's "Digital or satellite" step says this in all four languages.
+- Narrow phones (≤ 400 px): the top row is tighter, so "Whole mountain" in English no longer
+  pushes the "?" button off screen.
+
 ## Round 6 (2026-11-26): the first-visit guide
 
 - **First visit** (nothing saved in the browser, and not arriving by a shared station, story or

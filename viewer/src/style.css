@@ -994,3 +994,50 @@ html[lang='zh'] .elbrus-map { --ch-mono: 'JetBrains Mono', 'PingFang SC', 'Micro
   font: 700 16px var(--ch-body);
 }
 .ch-help button { width: 36px; height: 36px; min-height: 0 !important; padding: 0 !important; display: grid; place-items: center; }
+
+/* Sky clock: the time the sky shows; a tap speeds the sky up or brings it back to now. */
+.sky-clock {
+  position: absolute;
+  top: calc(max(14px, env(safe-area-inset-top)) + 52px);
+  right: max(14px, env(safe-area-inset-right));
+  display: none;
+  align-items: center;
+  gap: 7px;
+  min-height: 32px;
+  padding: 0 12px 0 10px;
+  border: 1px solid var(--ch-line);
+  border-radius: 999px;
+  background: var(--ch-panel);
+  backdrop-filter: blur(8px);
+  color: var(--ch-muted);
+  font-family: var(--ch-mono);
+  font-size: 12px;
+  cursor: pointer;
+}
+.elbrus-map.look-digital .sky-clock { display: flex; }
+.elbrus-map:not(.mode-climb) .sky-clock { right: calc(max(14px, env(safe-area-inset-right)) + 56px); }
+.sky-clock svg { width: 15px; height: 15px; color: var(--ch-dawn-2); }
+.sky-clock b { color: var(--ch-text); font-weight: 600; font-variant-numeric: tabular-nums; font-size: 13px; }
+.sky-clock span { opacity: 0.8; }
+.sky-clock.is-fast { border-color: rgba(255, 79, 216, 0.55); }
+.sky-clock.is-fast span { color: var(--ch-neon); opacity: 1; }
+.sky-clock:hover { color: var(--ch-text); border-color: var(--ch-dawn-2); }
+@media (max-width: 700px) {
+  .sky-clock, .elbrus-map:not(.mode-climb) .sky-clock {
+    top: calc(max(10px, env(safe-area-inset-top)) + 50px);
+    right: max(10px, env(safe-area-inset-right));
+    min-height: 28px;
+    padding: 0 9px 0 8px;
+    font-size: 11px;
+  }
+  .sky-clock b { font-size: 12px; }
+}
+/* Narrow phones: the top row (longer in English) must still fit with the help button. */
+@media (max-width: 400px) {
+  .ch-modes { gap: 4px; }
+  .ch-seg { padding: 2px; }
+  .ch-seg button { padding: 0 6px; font-size: 11px; }
+  .ch-lang { padding: 3px 7px; font-size: 11px; }
+}
+.sky-clock .sky-wx { font-style: normal; color: var(--ch-text); font-variant-numeric: tabular-nums; }
+.eu-attrib-text a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }

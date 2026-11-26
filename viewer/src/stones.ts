@@ -102,7 +102,7 @@ function rough(g: THREE.BufferGeometry, seed: number, amount: number): THREE.Buf
       p.getY(i) + (((h >> 10) % 1000) / 1000 - 0.5) * amount * 0.6,
       p.getZ(i) + (((h >> 20) % 1000) / 1000 - 0.5) * amount);
   }
-  const out = g.toNonIndexed();
+  const out = g.index ? g.toNonIndexed() : g;
   out.computeVertexNormals();
   return out;
 }

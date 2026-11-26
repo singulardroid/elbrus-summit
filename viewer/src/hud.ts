@@ -93,6 +93,10 @@ export function createHud(root: HTMLElement, actions: { onReset(): void; onNorth
     },
     setAttribution: (lines) => {
       attrib.replaceChildren(...lines.map((l) => Object.assign(document.createElement('p'), { textContent: l })));
+      // Weather in the digital sky (CC BY 4.0).
+      const wx = document.createElement('p');
+      wx.innerHTML = '<a href="https://open-meteo.com/" target="_blank" rel="noopener">Weather data by Open-Meteo.com</a>, CC BY 4.0';
+      attrib.append(wx);
     },
   };
 }

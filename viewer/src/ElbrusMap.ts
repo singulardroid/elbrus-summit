@@ -8,7 +8,10 @@ import { Doors } from './doors';
 import { Climb } from './climb';
 import { ClimbHud } from './climbHud';
 import { setTerrainLighting, setTerrainTime, setTerrainTrail, setTerrainStones, setTerrainArrival, TRAIL_POINTS } from './synthwave';
-import { Sky, timeOfDay, type TimeOfDay } from './celestial';
+import { Sky, skyAt, timeOfDay, type SkyFx, type SkyState, type TimeOfDay } from './celestial';
+import { WeatherFeed, type Weather } from './weather';
+import { Precip } from './precip';
+import { SkyChip, SkyClock } from './skyClock';
 import { ClimbRig } from './rig';
 import { Stones } from './stones';
 import { StoryView, type StoriesFile } from './storyView';
@@ -92,7 +95,19 @@ export class ElbrusMap {
   private readonly skyDome = new Sky();
   private rig?: ClimbRig;
   private stones?: Stones;
-  private tod: TimeOfDay = timeOfDay(0);
+  private readonly skyClock = new SkyClock();
+  private skyChip?: SkyChip;
+  private skyTickAt = 0;
+  private readonly weather = new WeatherFeed();
+  private readonly precip = new Precip();
+  private wx?: Weather; // the weather now shown (eased toward the data)
+  private readonly fx: SkyFx = { cloud: 0, cloudOffset: new THREE.Vector2(), cloudMorph: 0, storm: 0, flash: 0, haze: 0 };
+  private rainAmt = 0;
+  private snowAmt = 0;
+  private nextFlash = 3;
+  private readonly windVec = new THREE.Vector2();
+  private skyState: SkyState = skyAt(this.skyClock.instant);
+  private tod: TimeOfDay = timeOfDay(this.skyState);
   private arrivedAt = 0;
   private trailAt = -1e9;
   private portalsKey = '';
@@ -137,6 +152,7 @@ export class ElbrusMap {
     this.scene.add(this.sky);
     this.skyDome.group.visible = false;
     this.scene.add(this.skyDome.group);
+    this.scene.add(this.precip.group);
 
 
     this.controls = new CameraControls(this.camera, this.renderer.domElement);
@@ -173,6 +189,8 @@ export class ElbrusMap {
       onNorth: () => this.faceNorth(),
       onPlaces: () => this.togglePlaces(),
     });
+    this.skyChip = new SkyChip(container, this.skyClock, () => (this.dirty = true));
+    this.weather.start(() => (this.dirty = true));
 
     this.setupPointer();
     window.addEventListener('keydown', this.onKeyDown);
@@ -558,6 +576,7 @@ export class ElbrusMap {
     this.updateDetail();
     this.sky.visible = !digital;
     this.skyDome.group.visible = digital;
+    this.precip.group.visible = digital;
     if (!digital) (this.scene.fog as THREE.Fog).color.copy(SKY.horizon);
     if (this.routes) this.routes.group.visible = !digital;
     (this.walls?.material as THREE.MeshLambertMaterial | undefined)?.color.set(digital ? 0x6a4a9e : 0xffffff);
@@ -814,10 +833,63 @@ export class ElbrusMap {
     this.applyPanelPadding();
   }
 
+  /**
+   * Weather for the sky's time at altitude `alt`, eased so changes (and the loop back to the start
+   * of the data) blend over a few seconds; then clouds, haze, rain, snow and lightning from it.
+   */
+  private updateWeather(alt: number, dt: number, skyDt: number): void {
+    const target = this.weather.at(this.skyClock.instant, alt);
+    const k = 1 - Math.exp(-dt * 0.7);
+    const w = this.wx ?? (this.wx = { ...target });
+    for (const key of ['temp', 'precip', 'cloud', 'cloudLow', 'visibility', 'wind', 'gust'] as const) w[key] += (target[key] - w[key]) * k;
+    const dWind = ((target.windFrom - w.windFrom + 540) % 360) - 180;
+    w.windFrom = (w.windFrom + dWind * k + 360) % 360;
+    w.code = target.code;
+    w.snow = target.snow;
+
+    // Wind: toward where it blows (north is -Z). Clouds drift with it, faster when the sky runs fast.
+    const from = THREE.MathUtils.degToRad(w.windFrom);
+    const ms = w.wind / 3.6;
+    this.windVec.set(-Math.sin(from), Math.cos(from)).multiplyScalar(Math.min(ms, 25));
+    const drift = Math.min((ms / 700) * skyDt, 0.3 * dt);
+    this.fx.cloudOffset.x -= -Math.sin(from) * drift;
+    this.fx.cloudOffset.y -= Math.cos(from) * drift;
+    this.fx.cloudMorph += Math.min(skyDt / 3600, dt * 0.05) * (0.2 + ms / 40);
+
+    const storm = w.code >= 95;
+    this.fx.cloud = Math.min(1, Math.max(w.cloud, w.cloudLow));
+    this.fx.storm = storm ? 1 : Math.min(1, w.precip / 4) * w.cloud * 0.6;
+    const fogged = w.code === 45 || w.code === 48 ? 0.75 : 0;
+    this.fx.haze = Math.max(fogged, THREE.MathUtils.smoothstep(8000 - w.visibility, 0, 7500) * 0.85,
+      THREE.MathUtils.smoothstep(30000 - w.visibility, 0, 22000) * 0.4);
+
+    const fall = Math.pow(Math.min(w.precip / 4, 1), 0.6);
+    const spindrift = w.temp < 0 ? THREE.MathUtils.clamp((w.wind - 40) / 60, 0, 0.3) : 0;
+    this.rainAmt = w.snow ? 0 : fall;
+    this.snowAmt = w.snow ? Math.max(fall, spindrift) : spindrift;
+
+    // Lightning: a flash every few seconds in a thunderstorm, sometimes a double one.
+    this.fx.flash = Math.max(0, this.fx.flash - dt * 5);
+    if (storm) {
+      this.nextFlash -= dt;
+      if (this.nextFlash <= 0) {
+        this.fx.flash = 1;
+        this.nextFlash = Math.random() < 0.3 ? 0.18 : 3 + Math.random() * 9;
+      }
+    }
+    this.skyChip?.setWeather(this.weather.active ? w : null, alt);
+  }
+
   private frame(): void {
     this.timer.update();
     const dt = Math.min(this.timer.getDelta(), 0.1);
     const time = performance.now() / 1000;
+    // The sky runs on wall-clock time, not frame time (slow frames must not slow it down);
+    // a long gap (hidden tab) counts as one second.
+    const realDt = Math.min(time - (this.skyTickAt || time), 1);
+    this.skyTickAt = time;
+    this.skyClock.tick(realDt);
+    const skyDt = realDt * this.skyClock.speed;
     const climbing = this.mode === 'climb' && !!this.climb && !!this.rig;
     if (!climbing && this.idleSpin && !this.interacting) this.controls.rotate(dt * 0.045, 0, true);
     if (!climbing && this.controls.update(dt)) this.dirty = true;
@@ -826,8 +898,9 @@ export class ElbrusMap {
     if (!this.dirty) return; // render on demand: idle = no GPU work
     this.dirty = false;
 
-    const progress = this.climb ? THREE.MathUtils.clamp(this.climb.d / this.climb.j.lengthM, 0, 1) : 0;
-    this.tod = timeOfDay(progress);
+    this.skyState = skyAt(this.skyClock.instant);
+    this.tod = timeOfDay(this.skyState);
+    this.skyChip?.update(this.tod.sunEl > -0.8);
     const cam = this.camera.position;
     let dist: number;
 
@@ -893,11 +966,17 @@ export class ElbrusMap {
     const fog = this.scene.fog as THREE.Fog;
     const pr = this.renderer.getPixelRatio();
     if (this.look === 'digital') {
+      const alt = climbing ? cam.y : this.controls.getTarget(this.tmpB).y;
+      this.updateWeather(alt, realDt, skyDt);
+      const haze = this.fx.haze;
       fog.color.copy(this.tod.fog);
-      fog.near = climbing ? 1200 : dist * 0.7 + 900;
-      fog.far = climbing ? 26000 : dist * 5 + 24000;
-      this.skyDome.update(this.camera, this.tod, progress, time, dt, pr);
-      setTerrainLighting(this.tod.lightDir, this.tod.lightColor, this.tod.ambient);
+      fog.near = (climbing ? 1200 : dist * 0.7 + 900) * (1 - 0.9 * haze);
+      fog.far = (climbing ? 26000 : dist * 5 + 24000) * (1 - 0.88 * haze);
+      this.skyDome.update(this.camera, this.skyState, this.tod, this.fx, time, dt, pr);
+      this.precip.update(cam, time, this.rainAmt, this.snowAmt, this.windVec, pr);
+      const cover = this.fx.cloud;
+      const light = this.tod.lightColor.clone().multiplyScalar(1 - 0.55 * cover - 0.25 * this.fx.storm);
+      setTerrainLighting(this.tod.lightDir, light, this.tod.ambient + 0.05 * cover + this.fx.flash * 0.9);
       setTerrainTime(time);
     } else {
       fog.near = dist * 1.1 + 4000;
