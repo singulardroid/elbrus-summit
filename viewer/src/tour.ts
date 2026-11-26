@@ -155,6 +155,8 @@ export class Tour {
     let html = `
       <div class="tour-top">
         ${id !== 'welcome' && id !== 'final' ? `<span class="tour-count">${esc(t('tour.count', { i: num(this.i), n: num(middle) }))}</span>` : '<span></span>'}
+        ${id === 'welcome' ? `<div class="tour-langs" role="group" aria-label="${esc(t('lang.label'))}">${LANGS
+          .map((l) => `<button type="button" lang="${l.id}" data-lang="${l.id}" aria-pressed="${l.id === lang()}">${esc(l.name)}</button>`).join('')}</div>` : ''}
         <button type="button" class="tour-x" aria-label="${esc(t('tour.close'))}">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" d="M6 6l12 12M18 6 6 18"/></svg>
         </button>
@@ -166,10 +168,8 @@ export class Tour {
         .map((s) => `<li><span class="tour-dot" style="--c:${hex(STATE_COLOR[s])}"></span>${esc(t(`state.${s}`))}</li>`).join('')}</ul>`;
     }
     if (id === 'welcome') {
-      html += `<div class="tour-langs" role="group" aria-label="${esc(t('lang.label'))}">${LANGS
-        .map((l) => `<button type="button" lang="${l.id}" data-lang="${l.id}" aria-pressed="${l.id === lang()}">${esc(l.name)}</button>`).join('')}</div>
-        <div class="tour-actions">
-          <button type="button" class="tour-btn tour-secondary" data-act="station1">${esc(t('tour.skip'))}</button>
+      html += `<div class="tour-actions">
+          <button type="button" class="tour-btn tour-skip" data-act="station1">${esc(t('tour.skip'))} <span class="tour-arrow" aria-hidden="true">→</span></button>
           <button type="button" class="tour-btn tour-primary" data-act="next">${esc(t('tour.start'))}</button>
         </div>`;
     } else if (id === 'final') {
@@ -265,19 +265,19 @@ addStrings({
   ru: {
     'tour.count': '{i} из {n}',
     'tour.close': 'Закрыть гид',
-    'tour.start': 'Начать обзор',
-    'tour.skip': 'Пропустить, к станции 1',
+    'tour.start': 'Пройти экскурсию',
+    'tour.skip': 'Сразу к станции 1',
     'tour.next': 'Далее',
     'tour.back': 'Назад',
     'tour.toStation1': 'К станции 1',
     'tour.first': 'Начать со станции 1',
     'tour.newest': 'Новая история: № {n}',
     'tour.help': 'Гид по сайту',
-    'tour.welcome.title': 'Поднимитесь на Эльбрус — история за историей',
-    'tour.welcome.body': '3D-модель самой высокой горы Европы в настоящем масштабе. 250 станций ведут от Азау ({lo}) до Западной вершины ({hi}), и на каждой — своя история: о горе, Кавказе и России. Новая станция открывается в назначенный день.',
-    'tour.mountain.title': 'Вся гора',
-    'tour.mountain.mouse': 'Это Эльбрус и его долины в настоящем масштабе. Тяните, чтобы повернуть, колесо — масштаб, правая кнопка — сдвиг. Попробуйте прямо сейчас.',
-    'tour.mountain.touch': 'Это Эльбрус и его долины в настоящем масштабе. Тяните пальцем, чтобы повернуть, щипок — масштаб, двумя пальцами — сдвиг. Попробуйте прямо сейчас.',
+    'tour.welcome.title': 'Поднимитесь на Эльбрус — история за историей',
+    'tour.welcome.body': '250 станций ведут от Азау у подножия до Западной вершины. На каждой станции — своя история о горе, Кавказе и России. Станции открываются в определённое время. Подписывайтесь на наши уведомления.',
+    'tour.mountain.title': 'Эльбрус и окрестности',
+    'tour.mountain.mouse': 'Гора и долины вокруг — в реальном масштабе. Тяните, чтобы повернуть, колесом приближайте, правой кнопкой сдвигайте. Попробуйте прямо сейчас.',
+    'tour.mountain.touch': 'Гора и долины вокруг — в реальном масштабе. Поворачивайте пальцем, приближайте щипком, сдвигайте двумя пальцами. Попробуйте прямо сейчас.',
     'tour.places.title': 'Места, маршруты и вид',
     'tour.places.body': 'В списке — приюты, станции канатной дороги, вершины и два классических маршрута; нажмите на подпись на карте, чтобы прочитать о месте. Компас поворачивает карту севером вверх, стрелка возвращает исходный вид.',
     'tour.modes.title': 'Подъём или вся гора',
@@ -304,8 +304,8 @@ addStrings({
   en: {
     'tour.count': '{i} of {n}',
     'tour.close': 'Close the guide',
-    'tour.start': 'Show me around',
-    'tour.skip': 'Skip, go to station 1',
+    'tour.start': 'Take the tour',
+    'tour.skip': 'Skip to station 1',
     'tour.next': 'Next',
     'tour.back': 'Back',
     'tour.toStation1': 'Go to station 1',
@@ -313,10 +313,10 @@ addStrings({
     'tour.newest': 'Newest story: No. {n}',
     'tour.help': 'Guide to the site',
     'tour.welcome.title': 'Climb Elbrus, one story at a time',
-    'tour.welcome.body': "A true-to-scale 3D model of Europe's highest mountain. 250 stations lead from Azau ({lo}) to the West Summit ({hi}), and each holds a story: about the mountain, the Caucasus and Russia. A new station opens on a set day.",
-    'tour.mountain.title': 'The whole mountain',
-    'tour.mountain.mouse': 'This is Elbrus and its valleys, to scale. Drag to turn it, scroll to zoom, right-drag to move. Try it now.',
-    'tour.mountain.touch': 'This is Elbrus and its valleys, to scale. Drag to turn it, pinch to zoom, two fingers to move. Try it now.',
+    'tour.welcome.body': '250 stations lead from Azau at the foot of the mountain to the West Summit. Each station holds its own story about the mountain, the Caucasus and Russia. Stations open at set times. Subscribe to our notifications.',
+    'tour.mountain.title': 'Elbrus and its surroundings',
+    'tour.mountain.mouse': 'The mountain and the valleys around it, true to scale. Drag to turn it, scroll to zoom, right-drag to move. Try it now.',
+    'tour.mountain.touch': 'The mountain and the valleys around it, true to scale. Drag to turn it, pinch to zoom, two fingers to move. Try it now.',
     'tour.places.title': 'Places, routes and the view',
     'tour.places.body': 'The list has the huts, cable-car stations, summits and the two classic routes; click a label on the map to read about a place. The compass turns north up, and the arrow brings back the starting view.',
     'tour.modes.title': 'Climb or whole mountain',
@@ -343,8 +343,8 @@ addStrings({
   zh: {
     'tour.count': '{i} / {n}',
     'tour.close': '关闭指南',
-    'tour.start': '带我看看',
-    'tour.skip': '跳过，前往第 1 站',
+    'tour.start': '参观导览',
+    'tour.skip': '直接前往第 1 站',
     'tour.next': '下一步',
     'tour.back': '上一步',
     'tour.toStation1': '前往第 1 站',
@@ -352,10 +352,10 @@ addStrings({
     'tour.newest': '最新故事：{n} 号',
     'tour.help': '网站指南',
     'tour.welcome.title': '一站一个故事，登上厄尔布鲁士',
-    'tour.welcome.body': '欧洲最高峰的真实比例 3D 模型。250 个站点从阿扎乌（{lo}）一路通往西峰（{hi}），每一站都有一个故事：关于这座山、高加索和俄罗斯。新站点会在预定的日子开放。',
-    'tour.mountain.title': '整座山',
-    'tour.mountain.mouse': '这是按真实比例呈现的厄尔布鲁士及其山谷。拖动旋转，滚轮缩放，右键拖动平移。现在就试试吧。',
-    'tour.mountain.touch': '这是按真实比例呈现的厄尔布鲁士及其山谷。单指拖动旋转，双指捏合缩放，双指拖动平移。现在就试试吧。',
+    'tour.welcome.body': '250 个站点从山脚下的阿扎乌一路通往西峰。每一站都有自己的故事，关于这座山、高加索和俄罗斯。站点按预定时间开放，欢迎订阅我们的通知。',
+    'tour.mountain.title': '厄尔布鲁士及周边',
+    'tour.mountain.mouse': '山峰与周围的山谷，按真实比例呈现。拖动旋转，滚轮缩放，右键拖动平移。现在就试试吧。',
+    'tour.mountain.touch': '山峰与周围的山谷，按真实比例呈现。单指拖动旋转，双指捏合缩放，双指拖动平移。现在就试试吧。',
     'tour.places.title': '地点、路线和视角',
     'tour.places.body': '列表里有避难所、缆车站、山峰和两条经典路线；点击地图上的标签即可查看地点介绍。指南针让地图北方朝上，箭头按钮回到初始视角。',
     'tour.modes.title': '攀登或全山',
@@ -382,8 +382,8 @@ addStrings({
   ar: {
     'tour.count': '{i} من {n}',
     'tour.close': 'إغلاق الدليل',
-    'tour.start': 'خذني في جولة',
-    'tour.skip': 'تخطَّ، إلى المحطة 1',
+    'tour.start': 'ابدأ الجولة',
+    'tour.skip': 'تخطَّ إلى المحطة 1',
     'tour.next': 'التالي',
     'tour.back': 'السابق',
     'tour.toStation1': 'إلى المحطة 1',
@@ -391,10 +391,10 @@ addStrings({
     'tour.newest': 'أحدث قصة: رقم {n}',
     'tour.help': 'دليل الموقع',
     'tour.welcome.title': 'اصعد إلبروس، قصةً بعد قصة',
-    'tour.welcome.body': 'نموذج ثلاثي الأبعاد بمقياس حقيقي لأعلى جبل في أوروبا. تقودك 250 محطة من آزاو ({lo}) إلى القمة الغربية ({hi})، وفي كل محطة قصة: عن الجبل والقوقاز وروسيا. تُفتح محطة جديدة في يوم محدد.',
-    'tour.mountain.title': 'الجبل كاملًا',
-    'tour.mountain.mouse': 'هذا إلبروس ووديانه بمقياس حقيقي. اسحب للتدوير، واستخدم العجلة للتكبير، والسحب بالزر الأيمن للتحريك. جرّب الآن.',
-    'tour.mountain.touch': 'هذا إلبروس ووديانه بمقياس حقيقي. اسحب بإصبع للتدوير، وقرّب بإصبعين للتكبير، وحرّك بإصبعين. جرّب الآن.',
+    'tour.welcome.body': 'تقودك 250 محطة من آزاو عند سفح الجبل إلى القمة الغربية. في كل محطة قصتها عن الجبل والقوقاز وروسيا. تُفتح المحطات في مواعيد محددة، فاشترك في إشعاراتنا.',
+    'tour.mountain.title': 'إلبروس وما حوله',
+    'tour.mountain.mouse': 'الجبل والوديان من حوله بمقياس حقيقي. اسحب للتدوير، واستخدم العجلة للتكبير، والسحب بالزر الأيمن للتحريك. جرّب الآن.',
+    'tour.mountain.touch': 'الجبل والوديان من حوله بمقياس حقيقي. اسحب بإصبع للتدوير، وقرّب بإصبعين للتكبير، وحرّك بإصبعين. جرّب الآن.',
     'tour.places.title': 'الأماكن والمسارات والعرض',
     'tour.places.body': 'تضم القائمة الملاجئ ومحطات التلفريك والقمم والمسارين الكلاسيكيين؛ انقر على أي اسم على الخريطة لتقرأ عن المكان. تُدير البوصلة الخريطة ليكون الشمال للأعلى، ويعيد السهم العرض الأصلي.',
     'tour.modes.title': 'الصعود أو الجبل كاملًا',

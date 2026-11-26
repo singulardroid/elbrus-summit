@@ -929,15 +929,37 @@ html[lang='zh'] .elbrus-map { --ch-mono: 'JetBrains Mono', 'PingFang SC', 'Micro
 .tour-legend { list-style: none; margin: 12px 0 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; font-size: 13px; }
 .tour-legend li { display: flex; align-items: center; gap: 8px; }
 .tour-dot { width: 12px; height: 12px; border-radius: 3px; transform: rotate(45deg); background: var(--c); box-shadow: 0 0 10px var(--c); flex: none; }
-.tour-langs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px; }
-.tour-langs button {
-  min-height: 32px; padding: 0 12px;
+/* Welcome: the language switch sits centred in the top row, between an empty cell and the close button. */
+.tour-card[data-step='welcome'] .tour-top { display: grid; grid-template-columns: 32px 1fr 32px; align-items: center; gap: 8px; margin-bottom: 14px; }
+.tour-card[data-step='welcome'] .tour-x { margin-inline-end: 0; }
+.tour-langs {
+  justify-self: center;
+  display: inline-flex; gap: 2px; padding: 3px;
   border: 1px solid var(--ch-line); border-radius: 999px;
-  background: none; color: var(--ch-text); font: 500 13px var(--ch-body); cursor: pointer;
+  background: rgba(255, 255, 255, 0.04);
 }
-.tour-langs button[aria-pressed='true'] { background: var(--ch-snow); border-color: var(--ch-snow); color: var(--ch-navy); }
+.tour-langs button {
+  min-height: 30px; padding: 0 12px;
+  border: 0; border-radius: 999px;
+  background: none; color: var(--ch-muted); font: 500 13px var(--ch-body); cursor: pointer;
+  white-space: nowrap; transition: background 0.15s, color 0.15s;
+}
+.tour-langs button:hover { color: var(--ch-text); background: rgba(255, 255, 255, 0.07); }
+.tour-langs button[aria-pressed='true'] { background: var(--ch-snow); color: var(--ch-navy); font-weight: 600; }
+.tour-card[data-step='welcome'] h2, .tour-card[data-step='welcome'] .tour-body { text-align: center; text-wrap: balance; }
 .tour-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
-.tour-card[data-step='welcome'] .tour-actions, .tour-card[data-step='final'] .tour-actions { justify-content: flex-end; margin-top: 20px; }
+/* Welcome and finish: two centred buttons of equal width. */
+.tour-card[data-step='welcome'] .tour-actions, .tour-card[data-step='final'] .tour-actions {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 20px;
+}
+.tour-card[data-step='welcome'] .tour-btn, .tour-card[data-step='final'] .tour-btn { min-height: 42px; padding: 0 10px; }
+/* "Skip" reads as a way out rather than a second choice: dashed frame, dimmer text, an arrow. */
+.tour-skip {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  border: 1px dashed rgba(255, 255, 255, 0.22); background: none; color: var(--ch-muted);
+}
+.tour-skip:hover { color: var(--ch-text); border-color: rgba(255, 255, 255, 0.4); background: rgba(255, 255, 255, 0.04); }
+.tour-skip .tour-arrow { color: var(--ch-dawn-2); }
 .tour-gap { flex: 1; }
 .tour-btn {
   min-height: 38px; padding: 0 16px;
@@ -963,6 +985,10 @@ html[lang='zh'] .elbrus-map { --ch-mono: 'JetBrains Mono', 'PingFang SC', 'Micro
   .tour-card h2 { font-size: 16px; }
   .tour-card[data-step='welcome'] h2, .tour-card[data-step='final'] h2 { font-size: 20px; }
   .tour-body { font-size: 14px; }
+  .tour-langs button { padding: 0 9px; font-size: 12.5px; }
+  .tour-card[data-step='welcome'], .tour-card[data-step='final'] { padding: 14px 16px 18px; }
+  .tour-card[data-step='welcome'] .tour-actions, .tour-card[data-step='final'] .tour-actions { gap: 8px; }
+  .tour-card[data-step='welcome'] .tour-btn, .tour-card[data-step='final'] .tour-btn { padding: 0 6px; font-size: 13.5px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .tour-card, .tour-spot { transition: none; animation: none; }
