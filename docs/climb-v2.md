@@ -1,5 +1,42 @@
 # Direction v2: the 3D climb
 
+## Round 13 (2026-11-26): phones: speed and the pill layout
+
+**Measured on a Galaxy A33 5G** (Exynos 1280, Mali-G68, Android 13, Chrome 158) over adb and
+Chrome DevTools, frame rate per scenario:
+
+| | before | after |
+|---|---|---|
+| climb, standing | 14 fps | 41 fps |
+| climb, walking | – | 40 fps |
+| whole mountain, idle / turning | – | 58–60 fps |
+| story open | – | 47 fps |
+
+- **The main cost was the frosted glass:** 19 HUD panels with `backdrop-filter: blur()` over the
+  moving canvas; the browser redoes every blur every frame (26 → 60 fps without it). Touch
+  devices now get no blur and more solid panels; desktops keep it.
+- **Dynamic resolution** (`adaptResolution`): phones start at 1.5× (was 1.75×); when most frames
+  miss a refresh the scale steps down (to 0.85× at most) and never retries a scale that proved
+  too slow; it steps back up when frames are at full speed. The A33 settles at 1.375×.
+- **Cheaper shaders:** the sky's Milky Way and moon-crater noise only where it can show; the sky
+  dome is drawn after the terrain (only where sky shows); the trail painting skips far segments.
+- The other phones on the rack (Pixel 7a, Pixel 4, Galaxy XCover Pro ×2, A26 ×2, A05s) were
+  blocked by Chrome's first-run screen (accepting its terms is the owner's call): not measured.
+
+**Phone layout: the pill** (chosen from three drafts on the local branch
+`prototype/mobile-layouts`; `climbHud.ts` `layout()`): on screens ≤ 700 px the station card,
+story card and up/down buttons become one pill at the bottom (↓ № · altitude ↑); tapping it
+opens the stage, the story and the route strip above it. Look, language, time/weather and help
+move behind one ⚙ button. The same live elements are moved between the desktop and phone places
+(and back on a resize), so nothing is duplicated. The view is centred above the pill. The guide
+points at the ⚙ menu and the pill on phones, opens them for its steps, with phone wording in
+all four languages. Arabic mirrors the pill.
+
+**No Read button:** the story's title is the way in (a link-like button with a small → that
+flips in Arabic), on desktop and in the pill's panel; the card is shorter for it. Closed stations
+keep their one button, "Remind me when it opens", and their title is not a link. The guide says
+"tap the title" (four languages).
+
 ## Round 12 (2026-11-26): the altimeter loading screen
 
 - Five loading-screen designs were compared (sunrise poster, altimeter climb, contour map,

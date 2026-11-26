@@ -265,11 +265,15 @@ export class Sky {
           float gl = dot(s, galPole);
           float core = pow(max(dot(s, galCenter), 0.0), 4.0);
           float band = exp(-gl * gl / (0.012 + 0.03 * core));
-          float clouds = fbm(s * 7.0) * 0.75 + fbm(s * 23.0) * 0.4;
-          float dust = 1.0 - 0.75 * exp(-pow(gl + 0.012 * (fbm(s * 11.0) - 0.5), 2.0) / 0.0009) * (0.4 + core);
           float stars = night * smoothstep(0.0, 0.2, y);
-          float mw = band * clouds * dust * (0.55 + 1.6 * core) * stars;
-          c += mix(vec3(0.32, 0.3, 0.7), vec3(0.95, 0.66, 0.6), core) * mw * 0.5;
+          // The noise (three fbm calls, the most expensive part of the sky) only where it can show:
+          // at night, above the horizon, near the band. Saves most of the sky's cost on phones.
+          if (stars * band > 0.004) {
+            float clouds = fbm(s * 7.0) * 0.75 + fbm(s * 23.0) * 0.4;
+            float dust = 1.0 - 0.75 * exp(-pow(gl + 0.012 * (fbm(s * 11.0) - 0.5), 2.0) / 0.0009) * (0.4 + core);
+            float mw = band * clouds * dust * (0.55 + 1.6 * core) * stars;
+            c += mix(vec3(0.32, 0.3, 0.7), vec3(0.95, 0.66, 0.6), core) * mw * 0.5;
+          }
           // Andromeda: a small tilted oval of light. Orion Nebula: a pink smudge under the belt.
           vec3 ar = normalize(cross(galPole, andromeda)), au = cross(andromeda, ar);
           vec3 q = s - andromeda;
@@ -296,7 +300,7 @@ export class Sky {
           vec3 mn = mr * mq.x + mu * mq.y - moonDir * mz;
           float lit = smoothstep(-0.06, 0.08, dot(mn, sunDir));
           float disc = smoothstep(R, R - 0.003, am);
-          float craters = 0.82 + 0.18 * fbm(d * 180.0);
+          float craters = am < R ? 0.82 + 0.18 * fbm(d * 180.0) : 1.0; // only on the disc
           float mvis = smoothstep(-0.02, 0.02, y) * (1.0 - 0.55 * day);
           vec3 moonCol = vec3(0.86, 0.9, 1.0) * craters * (0.07 + 0.93 * lit);
           c = mix(c, moonCol + c * 0.15, disc * mvis);
@@ -333,7 +337,10 @@ export class Sky {
       side: THREE.BackSide, depthWrite: false, fog: false,
     }));
     this.dome.frustumCulled = false;
-    this.dome.renderOrder = -3;
+    // Drawn after the terrain (it sits at the far plane, depth 1), so the depth test skips every
+    // pixel the mountain already covers: the sky's shader runs only where sky shows. (Drawn first,
+    // it was computed for the whole screen and then painted over; on a Galaxy A33 that cost ~40%.)
+    this.dome.renderOrder = 1000;
 
     // Stars, in equatorial coordinates (the pivot turns them with sidereal time): the bright
     // catalogue stars, then faint ones, a third of them crowding the Milky Way.

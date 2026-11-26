@@ -1,6 +1,6 @@
 import type { Journey } from './data';
 import type { DoorState } from './doors';
-import { applyI18n, duration, km, LANGS, lang, num, onLang, plural, setLang, stationName, t, type Lang } from './i18n';
+import { addStrings, applyI18n, duration, km, LANGS, lang, num, onLang, plural, setLang, stationName, t, type Lang } from './i18n';
 
 /**
  * Climb HUD (in the "250 stories" style): where you are, up/down, the story card for the
@@ -34,6 +34,15 @@ export function stageText(st: { at?: string; from?: string; to?: string }): stri
     ? t('place.at', { name: stationName(st.at) })
     : t('place.between', { from: st.from ? stationName(st.from) : '…', to: st.to ? stationName(st.to) : t('summit') });
 }
+
+const GEAR = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7zm9 4.6v-2.2l-2.4-.5a7 7 0 0 0-.7-1.7l1.4-2-1.6-1.6-2 1.4a7 7 0 0 0-1.7-.7L13.5 3h-2.2l-.5 2.4a7 7 0 0 0-1.7.7l-2-1.4-1.6 1.6 1.4 2a7 7 0 0 0-.7 1.7L3 10.9v2.2l2.4.5c.2.6.4 1.2.7 1.7l-1.4 2 1.6 1.6 2-1.4c.5.3 1.1.5 1.7.7l.5 2.4h2.2l.5-2.4c.6-.2 1.2-.4 1.7-.7l2 1.4 1.6-1.6-1.4-2c.3-.5.5-1.1.7-1.7z"/></svg>';
+
+addStrings({
+  ru: { 'menu.settings': 'Настройки: вид, язык, время и погода, справка', 'pill.aria': 'Станция и история: открыть или скрыть' },
+  en: { 'menu.settings': 'Settings: look, language, time and weather, help', 'pill.aria': 'Station and story: show or hide' },
+  zh: { 'menu.settings': '设置：外观、语言、时间与天气、帮助', 'pill.aria': '站点与故事：展开或收起' },
+  ar: { 'menu.settings': 'الإعدادات: المظهر واللغة والوقت والطقس والمساعدة', 'pill.aria': 'المحطة والقصة: إظهار أو إخفاء' },
+});
 
 const ARROW_UP = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="M6 15l6-6 6 6"/></svg>';
 const ARROW_DOWN = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="M6 9l6 6 6-6"/></svg>';
@@ -82,12 +91,24 @@ export class ClimbHud {
         <div class="ch-card-n"></div>
         <div class="ch-card-body">
           <div class="ch-card-state"></div>
-          <div class="ch-card-title"></div>
+          <button type="button" class="ch-card-title"></button>
           <div class="ch-card-text"></div>
           <button type="button" class="ch-card-cta"></button>
         </div>
       </article>
-      <figure class="ch-strip" dir="ltr" data-i18n-aria="strip.aria"></figure>`;
+      <figure class="ch-strip" dir="ltr" data-i18n-aria="strip.aria"></figure>
+      <div class="ch-menu" role="group"></div>
+      <div class="ch-pop"></div>
+      <div class="ch-pill"><button type="button" class="ch-pill-mid" aria-expanded="false" data-i18n-aria="pill.aria"></button></div>`;
+    // Phones: one settings button (⚙) at the right of the top row.
+    const more = document.createElement('button');
+    more.type = 'button';
+    more.className = 'ch-more';
+    more.setAttribute('aria-expanded', 'false');
+    more.dataset.i18nAria = 'menu.settings';
+    more.dataset.i18nTitle = 'menu.settings';
+    more.innerHTML = GEAR;
+    this.$('.ch-modes').append(more);
     applyI18n(this.el);
     root.appendChild(this.el);
     for (const ev of ['pointerdown', 'wheel', 'touchstart'] as const) {
@@ -99,6 +120,10 @@ export class ClimbHud {
     this.el.querySelectorAll<HTMLButtonElement>('[data-look]').forEach((b) =>
       b.addEventListener('click', () => a.onLook(b.dataset.look as 'digital' | 'satellite')));
     this.$('.ch-card-cta').addEventListener('click', () => a.onRead());
+    // The story's title is the way in (no separate Read button for open stations).
+    this.$('.ch-card-title').addEventListener('click', () => {
+      if (this.el.dataset.state === 'open' || this.el.dataset.state === 'last') a.onRead();
+    });
     this.$('.ch-help button').addEventListener('click', () => a.onHelp());
     this.holdButton(this.$('.ch-up'), +1);
     this.holdButton(this.$('.ch-down'), -1);
@@ -106,6 +131,76 @@ export class ClimbHud {
     select.addEventListener('change', () => setLang(select.value as Lang));
     this.buildStrip();
     onLang(() => this.relabel(), true);
+
+    more.addEventListener('click', () => this.setMenu(!this.el.classList.contains('menu-open')));
+    this.$('.ch-pill-mid').addEventListener('click', () => this.setPill(!this.el.classList.contains('pill-open')));
+    // A tap anywhere else closes the menu (on the map, or on another HUD control: the HUD stops
+    // taps from reaching the page, hence the capture listener on it too).
+    const closeMenu = (e: Event) => {
+      const tg = e.target as Node;
+      if (this.el.classList.contains('menu-open') && !this.$('.ch-menu').contains(tg) && !more.contains(tg)) this.setMenu(false);
+    };
+    document.addEventListener('pointerdown', closeMenu);
+    this.el.addEventListener('pointerdown', closeMenu, true);
+    this.phone.addEventListener('change', () => this.layout());
+    this.layout();
+  }
+
+  // --- phones: the pill and the settings menu ---------------------------------------------------
+  // On narrow screens the station card, the story card and the up/down buttons merge into a pill at
+  // the bottom (↓ № · altitude ↑); tapping it opens the stage, the story and the route strip above
+  // it. Look, language, time/weather and help move behind one ⚙ button. The same live elements are
+  // moved between the desktop and the phone places (never copied), so everything stays in sync.
+  private readonly phone = window.matchMedia('(max-width: 700px)');
+  private readonly homes = new Map<Element, Comment>();
+
+  /** Put each element in its phone or desktop place. Called on mode and screen-size changes. */
+  private layout(): void {
+    const phone = this.phone.matches, climb = this.el.dataset.mode !== 'overview';
+    const menu = this.$('.ch-menu'), pill = this.$('.ch-pill'), pop = this.$('.ch-pop'), mid = this.$('.ch-pill-mid');
+    const sky = this.el.parentElement?.querySelector('.sky-clock');
+    const lookSeg = this.$('[data-look]')?.parentElement ?? null;
+    this.place([lookSeg, this.$('.ch-lang'), sky ?? null, this.$('.ch-help')], phone ? menu : null);
+    this.place([this.$('.ch-down')], phone && climb ? pill : null, pill.firstChild);
+    this.place([this.$('.ch-card-n'), this.$('.ch-alt')], phone && climb ? mid : null);
+    this.place([this.$('.ch-up')], phone && climb ? pill : null);
+    this.place([this.$('.ch-stage'), this.$('.ch-card-body'), this.$('.ch-strip')], phone && climb ? pop : null);
+    if (!phone) { this.setMenu(false); this.setPill(false); }
+  }
+
+  /** Move elements into `parent` (before `before`), or back to where they came from (parent null). */
+  private place(els: (Element | null)[], parent: Element | null, before: Node | null = null): void {
+    for (const e of els) {
+      if (!e) continue;
+      if (parent) {
+        if (!this.homes.has(e)) {
+          const mark = document.createComment('home');
+          e.before(mark);
+          this.homes.set(e, mark);
+        }
+        if (e.parentElement !== parent) parent.insertBefore(e, before);
+      } else {
+        const mark = this.homes.get(e);
+        if (mark) { mark.replaceWith(e); this.homes.delete(e); }
+      }
+    }
+  }
+
+  /** Open or close the phone settings menu. */
+  setMenu(open: boolean): void {
+    this.el.classList.toggle('menu-open', open);
+    this.$('.ch-more').setAttribute('aria-expanded', String(open));
+  }
+
+  /** Open or close the pill's panel (stage, story, strip). */
+  setPill(open: boolean): void {
+    this.el.classList.toggle('pill-open', open);
+    this.$('.ch-pill-mid').setAttribute('aria-expanded', String(open));
+  }
+
+  /** True on phone-width screens (the pill layout). */
+  get isPhone(): boolean {
+    return this.phone.matches;
   }
 
   /** Re-apply the current language to everything this HUD shows. */
@@ -124,6 +219,7 @@ export class ClimbHud {
 
   setMode(mode: 'climb' | 'overview'): void {
     this.el.dataset.mode = mode;
+    this.layout();
     this.el.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach((b) =>
       b.setAttribute('aria-pressed', String(b.dataset.mode === mode)));
   }
@@ -154,16 +250,27 @@ export class ClimbHud {
     this.lastKey = key;
     const card = this.$<HTMLElement>('.ch-card');
     card.dataset.state = s.state;
+    this.el.dataset.state = s.state; // the pill and its panel (phones) show it too
     this.$('.ch-card-n').textContent = t('num', { n: num(s.door) });
     this.$('.ch-card-state').textContent = t(`state.${s.state}`);
     const isOpen = s.state === 'open' || s.state === 'last';
-    this.$('.ch-card-title').textContent = isOpen ? t('ph.title') : t('closed.title');
+    const title = this.$<HTMLButtonElement>('.ch-card-title');
+    title.textContent = isOpen ? t('ph.title') : t('closed.title');
+    title.classList.toggle('is-link', isOpen);
+    title.tabIndex = isOpen ? 0 : -1;
+    title.title = isOpen ? t('cta.read') : '';
+    if (isOpen) title.setAttribute('aria-label', `${title.textContent}. ${t('cta.read')}`);
+    else title.removeAttribute('aria-label');
+    title.setAttribute('aria-disabled', String(!isOpen));
     this.$('.ch-card-text').textContent = isOpen
       ? t('ph.teaser')
       : s.state === 'next'
         ? t('next.teaser', { time: t('ph.time') })
         : t('closed.teaser', { date: t('ph.date'), ahead: plural('ahead', s.door - s.opened - 1) });
-    this.$('.ch-card-cta').textContent = isOpen ? t('cta.read') : t('cta.remind');
+    // Only closed stations keep a button (the reminder); open ones are read from the title.
+    const cta = this.$<HTMLButtonElement>('.ch-card-cta');
+    cta.textContent = t('cta.remind');
+    cta.hidden = isOpen;
   }
 
   private holdButton(btn: HTMLButtonElement, delta: number): void {

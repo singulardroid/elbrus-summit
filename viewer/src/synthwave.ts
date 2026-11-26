@@ -208,6 +208,10 @@ export function createTerrainMaterial(map: THREE.Texture): THREE.ShaderMaterial 
           for (int i = 0; i < ${TRAIL_POINTS - 1}; i++) {
             if (i >= trailN - 1) break;
             vec2 a = trail[i].xy, b = trail[i + 1].xy, ab = b - a;
+            // Cheap reject first: a segment farther away than the best so far (plus the glow) can't
+            // win. Most segments are skipped this way, which matters on phones.
+            vec2 mid = (a + b) * 0.5;
+            if (distance(vWorld.xz, mid) - 0.5 * length(ab) > min(best, 6.0)) continue;
             float t = clamp(dot(vWorld.xz - a, ab) / max(dot(ab, ab), 1e-4), 0.0, 1.0);
             float dd = length(vWorld.xz - (a + ab * t));
             if (dd < best) { best = dd; walked = trail[i].z; along = mix(trail[i].w, trail[i + 1].w, t); }

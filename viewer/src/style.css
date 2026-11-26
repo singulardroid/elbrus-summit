@@ -1065,3 +1065,91 @@ html[lang='zh'] .elbrus-map { --ch-mono: 'JetBrains Mono', 'PingFang SC', 'Micro
 @keyframes cm-pulse { 50% { box-shadow: 0 0 0 3px rgba(11, 22, 38, 0.8), 0 0 26px 6px currentColor; } }
 .cm:hover .cm-box, .cm:focus-visible .cm-box { transform: translateY(-2px); background: rgba(11, 22, 38, 0.97); }
 @media (prefers-reduced-motion: reduce) { .cm--here::after { animation: none; } }
+
+/* Phones and tablets: no frosted glass. Blurring panels over the moving 3D view makes the browser
+   redo every blur on every frame; on a Galaxy A33 that alone cut the climb from 60 to 26 fps.
+   The panels get a more solid background instead. (Desktops keep the blur.) */
+@media (pointer: coarse) {
+  *, *::before, *::after { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+  .elbrus-map { --ch-panel: rgba(11, 22, 38, 0.92); --eu-panel: rgba(18, 24, 32, 0.9); }
+  .sv { background: rgba(8, 10, 28, 0.88); }
+}
+
+/* --- Phones: the pill and the settings menu (climbHud.ts layout()) --------------------------- */
+.ch-more, .ch-menu, .ch-pill, .ch-pop { display: none; }
+@media (max-width: 700px) {
+  /* The station and story cards and the up/down column are empty here: their parts are in the pill. */
+  .ch .ch-status, .ch .ch-card, .ch .ch-nav { display: none; }
+
+  .ch-more {
+    all: unset; box-sizing: border-box; flex: none; width: 40px; height: 40px; display: grid; place-items: center;
+    border-radius: 50%; border: 1px solid var(--ch-line); background: var(--ch-panel); color: var(--ch-text); cursor: pointer;
+  }
+  .ch-more svg { width: 20px; height: 20px; }
+  .ch.menu-open .ch-more { background: var(--ch-dawn); border-color: var(--ch-dawn); color: var(--ch-navy); }
+  .ch-more:focus-visible { outline: 2px solid var(--ch-dawn-2); outline-offset: 2px; }
+
+  .ch-menu {
+    position: absolute; z-index: 6; top: calc(max(10px, env(safe-area-inset-top)) + 50px); inset-inline-end: 10px;
+    flex-direction: column; align-items: flex-end; gap: 8px; padding: 10px;
+    border-radius: 14px; border: 1px solid var(--ch-line); background: var(--ch-panel);
+  }
+  .ch.menu-open .ch-menu { display: flex; }
+  .ch-menu .ch-lang svg { display: inline; }
+  .ch-menu .ch-seg button { min-height: 36px; padding: 0 12px; font-size: 13px; }
+  .ch-menu .sky-clock { position: static; min-height: 36px; padding: 0 12px; font-size: 12px; }
+  .elbrus-map:not(.look-digital) .ch-menu .sky-clock { display: none; }
+
+  /* The pill: ↓  № 12 · 2 507 m  ↑ */
+  .ch[data-mode='climb'] .ch-pill, .ch:not([data-mode]) .ch-pill {
+    display: flex; align-items: center; gap: 4px; width: max-content;
+    position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(max(14px, env(safe-area-inset-bottom)) + 10px);
+    padding: 5px; border-radius: 999px; border: 1px solid var(--ch-line); background: var(--ch-panel);
+  }
+  .ch-pill > .ch-up, .ch-pill > .ch-down {
+    width: 48px; height: 48px; padding: 0; border-radius: 50%; border: 1px solid var(--ch-line);
+    background: rgba(255, 255, 255, 0.04); color: var(--ch-text); display: grid; place-items: center;
+  }
+  .ch-pill > .ch-up { border-color: var(--ch-dawn); box-shadow: 0 0 14px rgba(255, 122, 61, 0.3); }
+  .ch-pill > .ch-up span, .ch-pill > .ch-down span { display: none; }
+  .ch-pill > .ch-up svg, .ch-pill > .ch-down svg { width: 24px; height: 24px; }
+  .ch-pill-mid { all: unset; display: flex; align-items: baseline; gap: 8px; padding: 6px 12px; cursor: pointer; border-radius: 999px; }
+  .ch-pill-mid:focus-visible { outline: 2px solid var(--ch-dawn-2); }
+  .ch-pill-mid::after { content: ''; align-self: center; width: 0; height: 0; border-inline: 4px solid transparent; border-bottom: 5px solid var(--ch-muted); transition: transform 0.2s; }
+  .ch.pill-open .ch-pill-mid::after { transform: rotate(180deg); }
+  .ch-pill .ch-card-n { flex: none; font-size: 20px; }
+  .ch[data-state='last'] .ch-pill .ch-card-n { color: var(--ch-dawn); }
+  .ch[data-state='next'] .ch-pill .ch-card-n, .ch[data-state='closed'] .ch-pill .ch-card-n { color: #6f87a3; }
+  .ch-pill .ch-alt { flex: none; margin: 0; font-size: 16px; white-space: nowrap; }
+  .ch-pill .ch-alt-u { font-size: 11px; }
+
+  /* Its panel: stage, story, route strip. */
+  .ch.pill-open .ch-pop {
+    display: flex; flex-direction: column; gap: 10px;
+    position: absolute; left: 10px; right: 10px; bottom: calc(max(14px, env(safe-area-inset-bottom)) + 74px);
+    padding: 12px 14px; border-radius: 14px; border: 1px solid var(--ch-line); background: var(--ch-panel);
+  }
+  .ch-pop .ch-stage { margin: 0; }
+  .ch-pop .ch-card-text { display: none; }
+  .ch[data-state='next'] .ch-pop .ch-card-cta, .ch[data-state='closed'] .ch-pop .ch-card-cta {
+    background: transparent; color: var(--ch-text) !important; border: 1px solid var(--ch-muted);
+  }
+  .ch-pop .ch-strip { position: static; width: auto; height: 84px; padding: 0; border: 0; background: none; }
+  .ch-pop .ch-strip svg { height: 54px; }
+}
+
+/* The story's title is the way in: a link-like button (no separate Read button). */
+.ch .ch-card-title {
+  all: unset; display: block; font-family: var(--ch-head); font-weight: 600; font-size: 16px; line-height: 1.25;
+  color: var(--ch-text); text-align: start; cursor: default; overflow-wrap: anywhere;
+}
+.ch .ch-card-title.is-link { cursor: pointer; }
+.ch .ch-card-title.is-link::after {
+  content: '→'; display: inline-block; margin-inline-start: 0.35em; color: var(--ch-dawn); transition: transform 0.15s ease;
+}
+[dir='rtl'] .ch .ch-card-title.is-link::after { content: '←'; }
+.ch .ch-card-title.is-link:hover { color: var(--ch-dawn-2); }
+.ch .ch-card-title.is-link:hover::after { transform: translateX(3px); }
+[dir='rtl'] .ch .ch-card-title.is-link:hover::after { transform: translateX(-3px); }
+.ch .ch-card-title:focus-visible { outline: 2px solid var(--ch-dawn-2); outline-offset: 3px; border-radius: 3px; }
+.ch-card-cta[hidden] { display: none !important; }

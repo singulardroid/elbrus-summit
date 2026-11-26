@@ -21,6 +21,8 @@ export interface TourHost {
   opened(): number;
   /** The guide is on screen: the map holds back stories opening by themselves. */
   setActive(on: boolean): void;
+  /** Phones: open the settings menu and/or the pill's panel, so the guide can point into them. */
+  phonePanels?(menu: boolean, pill: boolean): void;
 }
 
 type Place = 'auto' | 'center' | 'bottom';
@@ -31,6 +33,8 @@ interface Step {
   place?: Place;
   gesture?: boolean; // the body has mouse / touch variants
   legend?: boolean; // show the stone colours
+  /** On phones (the pill layout): what to point at, which panel to open, phone wording. */
+  phone?: { target: string; panel?: 'menu' | 'pill'; text?: boolean };
 }
 
 const STEPS: Step[] = [
@@ -38,17 +42,19 @@ const STEPS: Step[] = [
   { id: 'mountain', mode: 'overview', place: 'bottom', gesture: true },
   { id: 'places', mode: 'overview', target: '.eu-controls' },
   { id: 'modes', target: '.ch-modes .ch-seg:nth-child(1)' },
-  { id: 'look', target: '.ch-modes .ch-seg:nth-child(2)' },
-  { id: 'lang', target: '.ch-lang' },
-  { id: 'status', mode: 'climb', target: '.ch-status' },
+  { id: 'look', target: '.ch-modes .ch-seg:nth-child(2)', phone: { target: '.ch-menu', panel: 'menu', text: true } },
+  { id: 'lang', target: '.ch-lang', phone: { target: '.ch-menu', panel: 'menu', text: true } },
+  { id: 'status', mode: 'climb', target: '.ch-status', phone: { target: '.ch-pill', text: true } },
   { id: 'stones', mode: 'climb', place: 'bottom', gesture: true, legend: true },
-  { id: 'nav', mode: 'climb', target: '.ch-nav', gesture: true },
-  { id: 'card', mode: 'climb', target: '.ch-card' },
-  { id: 'strip', mode: 'climb', target: '.ch-strip' },
+  { id: 'nav', mode: 'climb', target: '.ch-nav', gesture: true, phone: { target: '.ch-pill' } },
+  { id: 'card', mode: 'climb', target: '.ch-card', phone: { target: '.ch-pop', panel: 'pill', text: true } },
+  { id: 'strip', mode: 'climb', target: '.ch-strip', phone: { target: '.ch-pop .ch-strip', panel: 'pill', text: true } },
   { id: 'final', place: 'center' },
 ];
 
 const STORE_KEY = 'elbrus.tour.done';
+/** Phone-width screens use the pill layout (climbHud.ts). */
+const isPhone = () => window.matchMedia('(max-width: 700px)').matches;
 
 export function tourSeen(): boolean {
   try {
@@ -119,6 +125,7 @@ export class Tour {
     cancelAnimationFrame(this.raf);
     window.removeEventListener('keydown', this.onKey, true);
     this.host.setActive(false);
+    this.host.phonePanels?.(false, false);
     if (then === 'station1') this.host.walkTo(1);
     else if (then === 'newest') this.host.walkTo(Math.max(1, this.host.opened()));
   }
@@ -131,6 +138,8 @@ export class Tour {
       if (step.mode === 'overview') this.host.showMountain();
       else this.host.showStation(1);
     }
+    const panel = isPhone() ? step.phone?.panel : undefined;
+    this.host.phonePanels?.(panel === 'menu', panel === 'pill');
     this.render();
     this.place();
     (this.card.querySelector('.tour-primary') as HTMLElement | null)?.focus({ preventScroll: true });
@@ -141,7 +150,8 @@ export class Tour {
     const id = step.id;
     const middle = STEPS.length - 2; // steps between the welcome and the finish
     const k = (s: string) => `tour.${id}.${s}`;
-    const body = step.gesture ? t(k(this.touch ? 'touch' : 'mouse')) : t(k('body'), { lo: metres(2358), hi: metres(5642) });
+    const body = isPhone() && step.phone?.text ? t(k('phone'))
+      : step.gesture ? t(k(this.touch ? 'touch' : 'mouse')) : t(k('body'), { lo: metres(2358), hi: metres(5642) });
     let html = `
       <div class="tour-top">
         ${id !== 'welcome' && id !== 'final' ? `<span class="tour-count">${esc(t('tour.count', { i: num(this.i), n: num(middle) }))}</span>` : '<span></span>'}
@@ -195,7 +205,8 @@ export class Tour {
     if (!this.isOpen) return;
     const step = STEPS[this.i];
     const box = this.root.getBoundingClientRect();
-    const target = step.target ? (this.root.querySelector(step.target) as HTMLElement | null) : null;
+    const sel = isPhone() && step.phone ? step.phone.target : step.target;
+    const target = sel ? (this.root.querySelector(sel) as HTMLElement | null) : null;
     const r = target && target.offsetParent !== null ? target.getBoundingClientRect() : null;
     const W = box.width, H = box.height, M = 12;
     const cw = this.card.offsetWidth, ch = this.card.offsetHeight;
@@ -284,7 +295,7 @@ addStrings({
     'tour.nav.mouse': '«Выше» и «Ниже» — на одну станцию; удерживайте, чтобы идти дальше. Работают и клавиши ↑ ↓, а ← → поворачивают вид.',
     'tour.nav.touch': '«Выше» и «Ниже» — на одну станцию; удерживайте, чтобы идти дальше.',
     'tour.card.title': 'История',
-    'tour.card.body': 'У открытых станций здесь их история. Откройте её кнопкой или просто остановитесь на камне — она откроется сама. У закрытых указано, когда они откроются.',
+    'tour.card.body': 'У открытых станций здесь их история: нажмите на заголовок, чтобы прочитать, или просто остановитесь на камне — она откроется сама. У закрытых указано, когда они откроются.',
     'tour.strip.title': 'Весь маршрут',
     'tour.strip.body': 'Профиль высоты от Азау до вершины со всеми 250 станциями. Нажмите в любом месте, чтобы перейти туда.',
     'tour.final.title': 'Готовы к подъёму?',
@@ -323,7 +334,7 @@ addStrings({
     'tour.nav.mouse': 'Up and Down move one station; hold to keep walking. The ↑ ↓ keys work too, and ← → turn the view.',
     'tour.nav.touch': 'Up and Down move one station; hold to keep walking.',
     'tour.card.title': 'The story',
-    'tour.card.body': 'Open stations show their story here. Read it with the button, or stop on a stone and it opens by itself. Closed stations say when they open.',
+    'tour.card.body': 'Open stations show their story here: tap the title to read it, or stop on a stone and it opens by itself. Closed stations say when they open.',
     'tour.strip.title': 'The whole route',
     'tour.strip.body': 'The altitude profile from Azau to the summit, with all 250 stations. Click or tap anywhere to walk there.',
     'tour.final.title': 'Ready to climb?',
@@ -362,7 +373,7 @@ addStrings({
     'tour.nav.mouse': '“向上”和“向下”每次移动一站；按住可以一直走。也可以用 ↑ ↓ 键，← → 键转动视角。',
     'tour.nav.touch': '“向上”和“向下”每次移动一站；按住可以一直走。',
     'tour.card.title': '故事',
-    'tour.card.body': '已开放的站点在这里显示故事。点按钮阅读，或在石头旁停下，故事会自动打开。未开放的站点会显示开放时间。',
+    'tour.card.body': '已开放的站点在这里显示故事：点按标题即可阅读，或在石头旁停下，故事会自动打开。未开放的站点会显示开放时间。',
     'tour.strip.title': '整条路线',
     'tour.strip.body': '从阿扎乌到顶峰的海拔剖面，标出了全部 250 个站点。点击任意位置即可走到那里。',
     'tour.final.title': '准备好攀登了吗？',
@@ -401,10 +412,42 @@ addStrings({
     'tour.nav.mouse': '«أعلى» و«أسفل» تنقلانك محطة واحدة؛ اضغط مطوّلًا لمواصلة السير. تعمل المفاتيح ↑ ↓ أيضًا، و← → تديران العرض.',
     'tour.nav.touch': '«أعلى» و«أسفل» تنقلانك محطة واحدة؛ اضغط مطوّلًا لمواصلة السير.',
     'tour.card.title': 'القصة',
-    'tour.card.body': 'تظهر هنا قصة المحطات المفتوحة. اقرأها من الزر، أو توقّف عند الحجر فتُفتح وحدها. أما المحطات المغلقة فتذكر موعد افتتاحها.',
+    'tour.card.body': 'تظهر هنا قصة المحطات المفتوحة: اضغط على العنوان لقراءتها، أو توقّف عند الحجر فتُفتح وحدها. أما المحطات المغلقة فتذكر موعد افتتاحها.',
     'tour.strip.title': 'المسار كاملًا',
     'tour.strip.body': 'مقطع الارتفاع من آزاو إلى القمة مع كل المحطات الـ250. انقر في أي مكان للانتقال إليه.',
     'tour.final.title': 'مستعد للصعود؟',
     'tour.final.body': 'ابدأ من سفح الجبل، أو انتقل مباشرة إلى أحدث قصة. يعيد زر «؟» فتح هذا الدليل.',
+  },
+});
+
+// Phone wording for the steps whose controls live in the ⚙ menu or the pill.
+addStrings({
+  ru: {
+    'tour.look.phone': 'Цифровой — рельеф с горизонталями и живое небо по вашему местному времени; через пару минут оно ускоряется. Спутник — настоящий снимок. Переключатель — в меню ⚙, там же время и погода.',
+    'tour.lang.phone': 'Русский, English, 中文 или العربية — тоже в меню ⚙. Выбор запомнится.',
+    'tour.status.phone': 'Внизу — где вы: номер станции и высота. Стрелки по бокам ведут вверх и вниз по маршруту.',
+    'tour.card.phone': 'Нажмите на номер — появится история станции; нажмите на её заголовок, чтобы прочитать. Или просто остановитесь на камне — она откроется сама.',
+    'tour.strip.phone': 'Там же — профиль высоты от Азау до вершины со всеми 250 станциями. Нажмите в любом месте, чтобы перейти туда.',
+  },
+  en: {
+    'tour.look.phone': 'Digital shows contour lines and a living sky on your local time; after a couple of minutes it speeds up. Satellite is the real photo. Switch them in the ⚙ menu, which also has the time and weather.',
+    'tour.lang.phone': 'Русский, English, 中文 or العربية, also in the ⚙ menu. Your choice is remembered.',
+    'tour.status.phone': 'At the bottom: where you are, the station number and altitude. The arrows on either side take you up and down the route.',
+    'tour.card.phone': 'Tap the number to show the station’s story, then tap its title to read it. Or simply stop on a stone and it opens by itself.',
+    'tour.strip.phone': 'It also holds the altitude profile from Azau to the summit with all 250 stations. Tap anywhere on it to go there.',
+  },
+  zh: {
+    'tour.look.phone': '“数字”显示等高线和随你本地时间变化的天空，几分钟后会加速；“卫星”是真实照片。在 ⚙ 菜单中切换，那里也有时间和天气。',
+    'tour.lang.phone': 'Русский、English、中文 或 العربية，也在 ⚙ 菜单中，选择会被记住。',
+    'tour.status.phone': '底部显示你的位置：站点编号和海拔。两侧的箭头带你沿路线上下移动。',
+    'tour.card.phone': '点按编号即可显示该站的故事，再点按标题阅读。或者停在石头上，它会自动打开。',
+    'tour.strip.phone': '这里还有从阿扎乌到峰顶的海拔剖面和全部 250 个站点。点按任意位置即可前往。',
+  },
+  ar: {
+    'tour.look.phone': '«رقمي» يعرض خطوط الكنتور وسماءً حيّة على وقتك المحلي تتسارع بعد دقيقتين، و«قمر صناعي» صورة حقيقية. بدّل بينهما من قائمة ⚙، وفيها أيضًا الوقت والطقس.',
+    'tour.lang.phone': 'Русский وEnglish و中文 والعربية من قائمة ⚙ أيضًا، ويُحفظ اختيارك.',
+    'tour.status.phone': 'في الأسفل موقعك: رقم المحطة والارتفاع. السهمان على الجانبين يأخذانك صعودًا ونزولًا على المسار.',
+    'tour.card.phone': 'اضغط على الرقم لتظهر قصة المحطة، ثم اضغط على عنوانها لقراءتها. أو توقّف عند حجر فتُفتح وحدها.',
+    'tour.strip.phone': 'وفيها أيضًا مقطع الارتفاع من آزاو إلى القمة بكل المحطات الـ250. اضغط على أي موضع للانتقال إليه.',
   },
 });

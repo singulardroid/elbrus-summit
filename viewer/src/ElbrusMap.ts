@@ -117,6 +117,10 @@ export class ElbrusMap {
   private readonly skyClock = new SkyClock();
   private skyChip?: SkyChip;
   private skyTickAt = 0;
+  private prCap = 2;
+  private prSamples: number[] = [];
+  private prLastFrame = 0;
+  private prFast = 0;
   private readonly weather = new WeatherFeed();
   private readonly precip = new Precip();
   private wx?: Weather; // the weather now shown (eased toward the data)
@@ -158,7 +162,10 @@ export class ElbrusMap {
     container.classList.add('elbrus-map');
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, isCoarsePointer() ? 1.75 : 2));
+    // Render scale: start at most 1.5 on phones (2 on desktops); adaptResolution() lowers it on
+    // slow GPUs (measured on a Galaxy A33: 14 fps at 1.75, the sky and terrain shaders fill-bound).
+    this.prCap = Math.min(window.devicePixelRatio, isCoarsePointer() ? 1.5 : 2);
+    this.renderer.setPixelRatio(this.prCap);
     container.appendChild(this.renderer.domElement);
 
     this.labelRenderer = new CSS2DRenderer();
@@ -340,6 +347,10 @@ export class ElbrusMap {
         setActive: (on) => {
           this.tourActive = on;
           if (!on) this.idleSpin = false;
+        },
+        phonePanels: (menu, pill) => {
+          this.climbHud?.setMenu(menu);
+          this.climbHud?.setPill(pill);
         },
       });
     }
@@ -812,11 +823,18 @@ export class ElbrusMap {
   private applyPanelPadding(): void {
     const pad = { left: 0, right: 0, top: 0, bottom: 0 };
     if (this.mode === 'climb' && this.climbHud) {
-      // Centre the climb view above the HUD at the bottom (route strip, and the card on phones).
+      // Centre the climb view above what sits at the bottom: the route strip (and a wide card), or
+      // on phones the pill. Only what is visible counts (on phones the strip is inside the pill's
+      // panel, which opens over the view without moving it).
       const c = this.container.getBoundingClientRect();
-      const strip = this.climbHud.el.querySelector('.ch-strip')!.getBoundingClientRect();
-      const card = this.climbHud.el.querySelector('.ch-card')!.getBoundingClientRect();
-      const top = card.width > c.width * 0.6 ? Math.min(card.top, strip.top) : strip.top;
+      let top = c.bottom;
+      for (const sel of ['.ch-strip', '.ch-card', '.ch-pill']) {
+        const e = this.climbHud.el.querySelector(sel) as HTMLElement | null;
+        if (!e || e.closest('.ch-pop')) continue;
+        const r = e.getBoundingClientRect();
+        if (!r.height || (sel === '.ch-card' && r.width <= c.width * 0.6)) continue;
+        top = Math.min(top, r.top);
+      }
       pad.bottom = Math.max(0, c.bottom - top);
     } else if (this.panel && this.panel.state !== 'closed') {
       const c = this.container.getBoundingClientRect();
@@ -966,6 +984,35 @@ export class ElbrusMap {
     this.skyChip?.setWeather(this.weather.active ? w : null, alt);
   }
 
+  /**
+   * Dynamic resolution: every ~60 rendered frames, look at the median frame time. Frames come in
+   * whole vsync steps (16.7 ms, 33.3 ms on a 60 Hz screen), so a median over 25 ms means most frames
+   * miss a refresh: render at a lower scale (down to 0.85). Back at full speed twice in a row: step
+   * up toward the starting scale. Frames after a pause (hidden tab, idle) are not counted.
+   */
+  private adaptResolution(time: number): void {
+    const dt = time - this.prLastFrame;
+    this.prLastFrame = time;
+    if (dt <= 0 || dt > 0.25) return;
+    this.prSamples.push(dt);
+    if (this.prSamples.length < 60) return;
+    const med = this.prSamples.sort((a, b) => a - b)[this.prSamples.length >> 1];
+    this.prSamples.length = 0;
+    const pr = this.renderer.getPixelRatio();
+    let next = pr;
+    if (med > 1 / 40 && pr > 0.85) {
+      next = Math.max(0.85, pr - 0.25);
+      this.prCap = Math.max(next, Math.min(this.prCap, pr - 0.125)); // never retry a scale that proved too slow
+    }
+    else if (med < 1 / 55 && pr < this.prCap && ++this.prFast >= 2) next = Math.min(this.prCap, pr + 0.125);
+    if (med >= 1 / 55) this.prFast = 0;
+    if (next !== pr) {
+      this.prFast = 0;
+      this.renderer.setPixelRatio(next);
+      this.resize();
+    }
+  }
+
   private frame(): void {
     this.timer.update();
     const dt = Math.min(this.timer.getDelta(), 0.1);
@@ -982,6 +1029,7 @@ export class ElbrusMap {
     if (this.look === 'digital') this.dirty = true; // the sky, portals and trail are animated
     if (climbing && this.climb!.update(dt)) this.dirty = true;
     if (!this.dirty) return; // render on demand: idle = no GPU work
+    this.adaptResolution(time);
     this.dirty = false;
 
     this.skyState = skyAt(this.skyClock.instant);
