@@ -938,11 +938,11 @@ export class ElbrusMap {
   }
 
   /**
-   * Weather for the sky's time at altitude `alt`, eased so changes (and the loop back to the start
+   * Weather at altitude `alt` for the clock's weather time (real now at 1×, ahead once sped up), eased so changes (and the loop back to the start
    * of the data) blend over a few seconds; then clouds, haze, rain, snow and lightning from it.
    */
   private updateWeather(alt: number, dt: number, skyDt: number): void {
-    const target = this.weather.at(this.skyClock.instant, alt);
+    const target = this.weather.at(this.skyClock.weatherInstant, alt);
     const k = 1 - Math.exp(-dt * 0.7);
     const w = this.wx ?? (this.wx = { ...target });
     for (const key of ['temp', 'precip', 'cloud', 'cloudLow', 'visibility', 'wind', 'gust'] as const) w[key] += (target[key] - w[key]) * k;

@@ -26,6 +26,12 @@ export class SkyClock {
   private fixedSpeed: number | null = null;
   /** True after the visitor asked for real time: the clock stays at 1×. */
   private realOnly = false;
+  /**
+   * How far the weather runs ahead of the real time (ms): the sky time gained by speeding up.
+   * The sky itself is shifted to the visitor's wall clock, but the weather is not, so at 1× it is
+   * Elbrus's real weather right now, whatever the visitor's time zone.
+   */
+  private ahead = 0;
 
   constructor() {
     const q = new URLSearchParams(location.search);
@@ -33,6 +39,7 @@ export class SkyClock {
     const m = /^(\d{1,2}):(\d{2})$/.exec(q.get('time') ?? '');
     if (m) now.setHours(+m[1], +m[2], 0, 0);
     this.ms = SkyClock.instantFor(now);
+    if (m) this.ahead = this.ms - Date.now(); // a chosen time shows that time's forecast
     const sp = Number(q.get('speed'));
     if (sp > 0) this.fixedSpeed = sp;
   }
@@ -59,6 +66,11 @@ export class SkyClock {
     return this.ms;
   }
 
+  /** The instant whose weather to show (Unix ms): real now, plus whatever the speed-up gained. */
+  get weatherInstant(): number {
+    return Date.now() + this.ahead;
+  }
+
   /** Hours and minutes the sky shows, on the visitor's (= Elbrus) wall clock. */
   get wallTime(): { h: number; m: number } {
     const d = new Date(this.ms + ELBRUS_UTC_OFFSET_MIN * 60000);
@@ -68,12 +80,15 @@ export class SkyClock {
   /** Advance by `dt` real seconds. */
   tick(dt: number): void {
     this.elapsed += dt;
-    this.ms += dt * 1000 * this.speed;
+    const speed = this.speed;
+    this.ms += dt * 1000 * speed;
+    this.ahead += dt * 1000 * (speed - 1);
   }
 
   /** Back to the visitor's real time, and stay there. */
   toNow(): void {
     this.ms = SkyClock.instantFor(new Date());
+    this.ahead = 0;
     this.fixedSpeed = null;
     this.realOnly = true;
   }
