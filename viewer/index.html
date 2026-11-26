@@ -7,9 +7,159 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;600;800&family=Onest:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap" />
+    <style>
+      /* Loading screen: an altimeter that climbs the real route from Azau to the summit while the
+         site loads. Inline, so it shows at once, before the code arrives; the app drives it through
+         window.elbrusBoot (hud.ts) and fades it out when the mountain is ready. */
+      html, body { margin: 0; height: 100%; background: #05030f; }
+      .boot {
+        position: fixed; inset: 0; z-index: 1000; overflow: hidden; color: #eef3f7;
+        background: radial-gradient(120% 90% at 20% 0%, #1c0b40 0%, #05030f 62%);
+        font-family: 'Onest', system-ui, sans-serif; transition: opacity .7s ease;
+        --pad: clamp(16px, 6vw, 80px);
+      }
+      .boot.is-done { opacity: 0; pointer-events: none; }
+      .boot-top { position: absolute; inset-inline: var(--pad); top: clamp(36px, 12vh, 140px); }
+      .boot-kicker { font: 500 12px 'JetBrains Mono', ui-monospace, monospace; letter-spacing: .14em; text-transform: uppercase; color: #ffb08a; }
+      .boot-alt { display: flex; align-items: baseline; gap: .18em; margin-top: 10px; }
+      .boot-num { font: 800 clamp(64px, 17vw, 200px)/.9 'Unbounded', system-ui, sans-serif; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+      .boot-unit { font: 400 clamp(20px, 4vw, 44px) 'Unbounded', system-ui, sans-serif; color: #a9bacd; }
+      .boot-stn { margin-top: 14px; font: 500 clamp(14px, 1.6vw, 18px) 'JetBrains Mono', ui-monospace, monospace; color: #ff7a3d; min-height: 1.3em; }
+      .boot-route { position: absolute; inset-inline: var(--pad); bottom: clamp(44px, 9vh, 100px); height: calc(32vh + 34px); }
+      .boot-chart { position: absolute; left: 0; top: 0; width: 100%; height: 32vh; overflow: visible; }
+      .boot[dir='rtl'] .boot-chart { transform: scaleX(-1); }
+      .boot-dot { position: absolute; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; background: #ff7a3d; box-shadow: 0 0 0 4px rgba(255,122,61,.25), 0 0 24px #ff7a3d; }
+      .boot-names { position: absolute; left: 0; right: 0; bottom: 0; height: 18px; }
+      .boot-names span { position: absolute; top: 0; transform: translateX(-50%); font: 500 11px 'JetBrains Mono', ui-monospace, monospace; color: #a9bacd; white-space: nowrap; transition: color .3s; }
+      .boot-names span.is-on { color: #ffb08a; }
+      .boot-names span:first-child { transform: none; }
+      .boot-names span:last-child { transform: translateX(-100%); }
+      .boot[dir='rtl'] .boot-names span:first-child { transform: translateX(-100%); }
+      .boot[dir='rtl'] .boot-names span:last-child { transform: none; }
+      /* Arabic: right-aligned, and no letter-spacing or monospace (they break the joined script). */
+      .boot[dir='rtl'] .boot-alt { justify-content: flex-end; }
+      .boot[dir='rtl'] .boot-kicker, .boot[dir='rtl'] .boot-stn, .boot[dir='rtl'] .boot-names span {
+        font-family: 'Noto Sans Arabic', 'Geeza Pro', 'Segoe UI', system-ui, sans-serif; letter-spacing: 0; text-transform: none;
+      }
+      .boot[dir='rtl'] .boot-kicker { font-size: 14px; font-weight: 600; }
+      @media (max-width: 640px) { .boot-names span:nth-child(2n) { display: none; } }
+      @media (max-height: 520px) { .boot-route { height: calc(26vh + 30px); } .boot-chart { height: 26vh; } }
+      @media (prefers-reduced-motion: reduce) { .boot { transition: none; } .boot-dot { box-shadow: 0 0 0 4px rgba(255,122,61,.25); } }
+    </style>
   </head>
   <body>
     <div id="app"></div>
+    <div class="boot" id="boot" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+      <div class="boot-top">
+        <div class="boot-kicker"></div>
+        <div class="boot-alt" dir="ltr"><b class="boot-num">2 350</b><span class="boot-unit">м</span></div>
+        <div class="boot-stn"></div>
+      </div>
+      <div class="boot-route" dir="ltr">
+        <svg class="boot-chart" viewBox="0 -12 1000 324" preserveAspectRatio="none" aria-hidden="true">
+          <defs>
+            <linearGradient id="boot-fill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#55308f" stop-opacity=".7" /><stop offset="1" stop-color="#1a0b3d" stop-opacity="0" />
+            </linearGradient>
+            <clipPath id="boot-walked"><rect class="boot-clip" x="-10" y="-20" width="0" height="360" /></clipPath>
+          </defs>
+          <g class="boot-grid" stroke="#fff" stroke-opacity=".07" vector-effect="non-scaling-stroke"></g>
+          <polygon class="boot-area" fill="url(#boot-fill)" />
+          <polyline class="boot-line" fill="none" stroke="#55308f" stroke-width="3" vector-effect="non-scaling-stroke" />
+          <polyline class="boot-line" fill="none" stroke="#ff7a3d" stroke-width="4" vector-effect="non-scaling-stroke" clip-path="url(#boot-walked)" />
+        </svg>
+        <div class="boot-dot"></div>
+        <div class="boot-names"></div>
+      </div>
+    </div>
+    <script>
+      (function () {
+        // The real route profile (81 samples, Azau → West Summit, 13.5 km) and its stations.
+        var H = [2363,2400,2442,2483,2526,2572,2615,2666,2726,2788,2849,2898,2936,2965,2988,3020,3060,3098,3125,3151,3188,3237,3292,3359,3422,3455,3468,3482,3508,3537,3565,3614,3669,3706,3741,3788,3834,3864,3889,3917,3942,3958,3974,4007,4046,4082,4118,4160,4207,4256,4306,4357,4410,4458,4498,4542,4599,4661,4722,4781,4839,4899,4962,5027,5092,5157,5215,5260,5292,5315,5331,5338,5340,5362,5411,5467,5517,5562,5592,5608,5625];
+        var STN = [0, .153, .302, .451, .547, .719, .911, 1];
+        var T = {
+          ru: { k: 'Вершина России · Загружаем Эльбрус', u: 'м', loc: 'ru-RU', s: ['Азау', 'Кругозор', 'Мир', 'Гарабаши', 'Приют 11', 'Пастухова', 'Седловина', 'Вершина'] },
+          en: { k: 'Summit of Russia · Loading Elbrus', u: 'm', loc: 'en-US', s: ['Azau', 'Krugozor', 'Mir', 'Garabashi', 'Priyut 11', 'Pastukhov', 'Saddle', 'Summit'] },
+          zh: { k: '俄罗斯之巅 · 正在加载厄尔布鲁士', u: '米', loc: 'zh-CN', s: ['阿扎乌', '克鲁戈佐尔', '米尔', '加拉巴希', '11号避难所', '帕斯图霍夫岩', '鞍部', '西峰'] },
+          ar: { k: 'قمة روسيا · جارٍ تحميل إلبروس', u: 'م', loc: 'ar-u-nu-latn', s: ['آزاو', 'كروغوزور', 'مير', 'غاراباشي', 'ملجأ 11', 'صخور باستوخوف', 'السرج', 'القمة'] }
+        };
+        // Same choice as i18n.ts: ?lang=, then the saved one, then the browser's, then English.
+        function pick() {
+          var ok = function (v) { return v && T[v] ? v : null; };
+          var v = ok(new URLSearchParams(location.search).get('lang'));
+          if (v) return v;
+          try { v = ok(localStorage.getItem('elbrus.lang')); if (v) return v; } catch (e) {}
+          var tags = navigator.languages || [navigator.language];
+          for (var i = 0; i < tags.length; i++) { v = ok(String(tags[i]).toLowerCase().split('-')[0]); if (v) return v; }
+          return 'en';
+        }
+        var lang = pick(), t = T[lang], rtl = lang === 'ar';
+        var el = document.getElementById('boot'), $ = function (s) { return el.querySelector(s); };
+        document.documentElement.lang = lang;
+        el.dir = rtl ? 'rtl' : 'ltr';
+        el.setAttribute('aria-label', t.k);
+        $('.boot-kicker').textContent = t.k;
+        $('.boot-unit').textContent = t.u;
+
+        var y = function (a) { return ((5800 - a) / 3600) * 300; };
+        var pts = H.map(function (a, i) { return (i * 12.5).toFixed(1) + ',' + y(a).toFixed(1); }).join(' ');
+        var lines = el.querySelectorAll('.boot-line');
+        lines[0].setAttribute('points', pts);
+        lines[1].setAttribute('points', pts);
+        $('.boot-area').setAttribute('points', '0,300 ' + pts + ' 1000,300');
+        $('.boot-grid').innerHTML = [3000, 4000, 5000].map(function (a) { return '<line x1="0" x2="1000" y1="' + y(a) + '" y2="' + y(a) + '"/>'; }).join('') +
+          STN.map(function (f) { var a = H[Math.round(f * 80)]; return '<line x1="' + f * 1000 + '" x2="' + f * 1000 + '" y1="' + y(a) + '" y2="300"/>'; }).join('');
+        $('.boot-names').innerHTML = t.s.map(function (n, i) {
+          return '<span style="left:' + ((rtl ? 1 - STN[i] : STN[i]) * 100) + '%">' + n + '</span>';
+        }).join('');
+        var names = el.querySelectorAll('.boot-names span');
+
+        var fmt = new Intl.NumberFormat(t.loc);
+        var alt = function (f) { // the profile, its ends pinned to Azau (2350) and the summit (5642)
+          var x = f * 80, i = Math.min(Math.floor(x), 79), k = x - i;
+          var a = H[i] + (H[i + 1] - H[i]) * k;
+          return 2350 + ((a - 2363) * (5642 - 2350)) / (5625 - 2363);
+        };
+
+        var shown = 0, target = 0, real = 0, done = false, t0 = performance.now(), last = t0, raf = 0;
+        var num = $('.boot-num'), stn = $('.boot-stn'), clip = $('.boot-clip'), dot = $('.boot-dot'), chart = $('.boot-chart');
+        var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        function frame(now) {
+          var dt = Math.min((now - last) / 1000, 0.1);
+          last = now;
+          // While the code downloads, creep up the first slopes; then follow the real progress.
+          target = Math.max(target, real, done ? 1 : Math.min(0.16, ((now - t0) / 1000) * 0.035));
+          shown += (target - shown) * (reduce ? 1 : Math.min(1, dt * (done ? 6 : 2.5)));
+          if (target - shown < 0.0005) shown = target;
+          var f = shown, a = alt(f);
+          num.textContent = fmt.format(Math.round(a));
+          var at = 0;
+          for (var i = 0; i < STN.length; i++) if (f >= STN[i] - 0.004) at = i;
+          stn.textContent = t.s[at];
+          for (i = 0; i < names.length; i++) names[i].classList.toggle('is-on', i <= at);
+          clip.setAttribute('width', String(f * 1000 + 10));
+          var r = chart.getBoundingClientRect(), host = chart.parentNode.getBoundingClientRect();
+          var fx = rtl ? 1 - f : f;
+          dot.style.left = (r.left - host.left + fx * r.width) + 'px';
+          dot.style.top = (r.top - host.top + ((y(a) + 12) / 324) * r.height) + 'px';
+          el.setAttribute('aria-valuenow', String(Math.round(f * 100)));
+          if (done && shown >= 1) {
+            el.classList.add('is-done');
+            setTimeout(function () { el.remove(); }, 800);
+            return;
+          }
+          raf = requestAnimationFrame(frame);
+        }
+        raf = requestAnimationFrame(frame);
+
+        // The app's hooks: progress 0…1, then done (climbs to the summit, then fades out).
+        window.elbrusBoot = {
+          set: function (f) { real = Math.max(real, Math.min(Math.max(f, 0), 1)); },
+          done: function () { done = true; },
+          error: function () { cancelAnimationFrame(raf); el.remove(); }
+        };
+      })();
+    </script>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

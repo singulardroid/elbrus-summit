@@ -98,21 +98,6 @@ html, body {
 }
 .elbrus-ui > * { pointer-events: auto; }
 
-.eu-loading {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-content: center;
-  gap: 12px;
-  background: var(--eu-bg);
-  color: #1d2a36;
-  text-align: center;
-  transition: opacity 0.5s ease;
-}
-.eu-loading.is-hidden { opacity: 0; pointer-events: none; }
-.eu-loading-title { font-size: 15px; font-weight: 600; letter-spacing: 0.02em; }
-.eu-bar { width: min(260px, 60vw); height: 4px; border-radius: 2px; background: rgba(29, 42, 54, 0.15); overflow: hidden; }
-.eu-bar-fill { width: 0; height: 100%; background: #1d2a36; transition: width 0.2s ease; }
 
 .eu-controls {
   position: absolute;
@@ -458,10 +443,6 @@ html, body {
   --ch-body: 'Onest', var(--eu-font);
 }
 .look-digital { background: #0a0618; }
-.look-digital .eu-loading { background: #0a0618; color: var(--ch-text); }
-.look-digital .eu-bar { background: rgba(255, 255, 255, 0.12); }
-.look-digital .eu-bar-fill { background: var(--ch-dawn); }
-
 /* Old overview chrome that the climb replaces */
 .elbrus-map.mode-climb .eu-readout,
 .elbrus-map.mode-climb .eu-hint,

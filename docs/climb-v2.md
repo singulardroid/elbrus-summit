@@ -1,5 +1,26 @@
 # Direction v2: the 3D climb
 
+## Round 12 (2026-11-26): the altimeter loading screen
+
+- Five loading-screen designs were compared (sunrise poster, altimeter climb, contour map,
+  250 stars, poster with facts); the prototype is kept on the local branch
+  `prototype/loading-screens`. **The altimeter climb won.**
+- **Inline in `index.html`**, so it shows the moment the page opens, before the ~900 kB of code
+  arrives (the page used to be blank until then). A big altitude counter climbs from 2 350 m to
+  5 642 m along the real route profile (81 samples of the trail), a glowing dot walks the line,
+  and the station name changes as it passes (Азау … Вершина).
+- **Progress:** while the code downloads it creeps up the first slopes (to 16%); then it follows
+  the real loading progress (`window.elbrusBoot.set`, from `hud.ts`), eased so it never jumps;
+  when the mountain is ready (`done`) it climbs to the summit and fades out, then is removed. On a
+  load error it is removed at once so the error message shows.
+- **Adaptive:** sizes follow the screen (phone to desktop, short landscape screens); on narrow
+  screens every second station label is hidden.
+- **Four languages**, chosen the same way as the app (`?lang=`, saved choice, browser); Arabic
+  reads right to left (the route is mirrored, the text right-aligned, without letter-spacing).
+- Accessible as a progress bar (`role="progressbar"`, `aria-valuenow`); reduced motion: no easing
+  or fade, no glow.
+- The old loader (`.eu-loading` in `hud.ts`) is gone.
+
 ## Round 11 (2026-11-26): the dome camera and an opening view per language
 
 - **A dome over the mountain** (`domeReach` in `ElbrusMap.ts`): the overview camera stays under an

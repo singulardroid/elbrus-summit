@@ -8,6 +8,7 @@ const container = document.getElementById('app')!;
 const map = new ElbrusMap(container, { dataUrl: './elbrus/' });
 map.load().catch((err) => {
   console.error(err);
+  window.elbrusBoot?.error();
   container.insertAdjacentHTML('beforeend', `<div class="eu-error">${t('loadError')}</div>`);
 });
 

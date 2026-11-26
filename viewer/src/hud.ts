@@ -1,4 +1,4 @@
-// Minimal on-screen UI: loading overlay, compass, reset, altitude readout, attribution.
+// Minimal on-screen UI: compass, reset, altitude readout, attribution.
 import type { TileStats } from './tiles';
 import { ICON } from './icons';
 import { applyI18n, distance, metres, onLang, t } from './i18n';
@@ -18,10 +18,6 @@ export function createHud(root: HTMLElement, actions: { onReset(): void; onNorth
   const ui = document.createElement('div');
   ui.className = 'elbrus-ui';
   ui.innerHTML = `
-    <div class="eu-loading" role="status">
-      <div class="eu-loading-title" data-i18n="loading"></div>
-      <div class="eu-bar"><div class="eu-bar-fill"></div></div>
-    </div>
     <div class="eu-controls">
       <button type="button" class="eu-btn eu-compass" data-i18n-title="northUp" data-i18n-aria="northUp">
         <svg viewBox="0 0 40 40" aria-hidden="true">
@@ -43,8 +39,6 @@ export function createHud(root: HTMLElement, actions: { onReset(): void; onNorth
   root.appendChild(ui);
 
   const $ = <T extends Element>(s: string) => ui.querySelector(s) as T;
-  const fill = $<HTMLElement>('.eu-bar-fill');
-  const loading = $<HTMLElement>('.eu-loading');
   const compass = $<HTMLButtonElement>('.eu-compass');
   const compassSvg = $<SVGElement>('.eu-compass svg');
   const readout = $<HTMLElement>('.eu-readout');
@@ -73,8 +67,9 @@ export function createHud(root: HTMLElement, actions: { onReset(): void; onNorth
   if (window.innerWidth > 1100) $<HTMLDetailsElement>('.eu-attrib').open = true;
 
   return {
-    setProgress: (f) => (fill.style.width = `${Math.round(f * 100)}%`),
-    hideLoading: () => loading.classList.add('is-hidden'),
+    // The loading screen (the altimeter) lives in index.html, so it shows before the code arrives.
+    setProgress: (f) => window.elbrusBoot?.set(f),
+    hideLoading: () => window.elbrusBoot?.done(),
     setHeading: (az) => (compassSvg.style.transform = `rotate(${az}rad)`),
     setReadout: (alt, dist) => {
       cameraText = t('readout.camera', { alt: metres(alt), dist: distance(dist) });
@@ -99,4 +94,11 @@ export function createHud(root: HTMLElement, actions: { onReset(): void; onNorth
       attrib.append(wx);
     },
   };
+}
+
+declare global {
+  interface Window {
+    /** The loading screen in index.html: progress 0…1, done (fade out), error (remove at once). */
+    elbrusBoot?: { set(f: number): void; done(): void; error(): void };
+  }
 }
